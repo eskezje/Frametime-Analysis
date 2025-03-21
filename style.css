@@ -700,3 +700,76 @@ pre {
 .raw-data-info {
   margin-bottom: 10px;
 }
+
+.supported-formats {
+  font-size: 14px;
+  color: #666;
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+.download-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: #2ecc71;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  font-weight: 500;
+  margin-right: 10px;
+  transition: background-color 0.2s ease;
+}
+
+.download-button:hover {
+  background-color: #27ae60;
+}
+
+.credits {
+  text-align: center;
+  font-size: 14px;
+  margin-top: 5px;
+  margin-bottom: 10px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.dark-theme .supported-formats {
+  color: #aaa;
+}
+
+.dark-theme .download-button {
+  background-color: #2ecc71;
+}
+
+.dark-theme .download-button:hover {
+  background-color: #27ae60;
+}
+
+.small-download-button {
+  display: inline-block;
+  padding: 6px 12px;
+  background-color: #2ecc71;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 10px;
+  transition: background-color 0.2s ease;
+}
+
+.small-download-button:hover {
+  background-color: #27ae60;
+}
+
+.credits-small {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+.dark-theme .credits-small {
+  color: #aaa;
+}
