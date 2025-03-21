@@ -201,7 +201,7 @@ function populateAllDatasetSelects() {
     selector.innerHTML = '';
     
     // Add option for each dataset
-    Object.entries(window.allDatasets || {}).forEach(([id, dataset]) => {
+    (window.allDatasets || []).forEach((dataset, id) => {
       const option = document.createElement('option');
       option.value = id;
       option.textContent = dataset.name;
@@ -311,6 +311,30 @@ function setupDragAndDrop() {
 
 // If you have a notify() function for user messages, define it here:
 function notify(msg, type = 'info') {
-  // e.g. create a small "toast" message or console.log
   console.log(`[${type.toUpperCase()}] ${msg}`);
+  
+  // Create UI notification
+  const container = document.getElementById('notification-container');
+  if (!container) return;
+  
+  const notification = document.createElement('div');
+  notification.className = `notification ${type}`;
+  notification.innerHTML = `
+    <span>${msg}</span>
+    <span class="notification-close">&times;</span>
+  `;
+  
+  container.appendChild(notification);
+  
+  // Auto-remove after 5 seconds
+  setTimeout(() => {
+    notification.style.animation = 'slide-out 0.3s forwards';
+    setTimeout(() => notification.remove(), 300);
+  }, 5000);
+  
+  // Add close button functionality
+  notification.querySelector('.notification-close').addEventListener('click', () => {
+    notification.style.animation = 'slide-out 0.3s forwards';
+    setTimeout(() => notification.remove(), 300);
+  });
 }

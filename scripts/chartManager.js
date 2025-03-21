@@ -63,7 +63,7 @@ function buildQQPlot(data) {
 
 /**
  * Renders (or re-renders) the Chart.js chart based on the current chartDatasets array.
- * @param {string} chartType - e.g. 'line' | 'scatter' | 'bar' | 'boxplot' | 'histogram' etc.
+ * @param {string} chartType - e.g. 'line' | 'scatter' | 'bar' | 'histogram' | 'qqplot' etc.
  */
 function renderChart(chartType) {
   const canvas = document.getElementById('mainChart');
@@ -81,7 +81,7 @@ function renderChart(chartType) {
     return;
   }
 
-  // Default chart is 'line', but if the user picks scatter/histogram/boxplot/qqplot, adapt:
+  // Default chart is 'line', but if the user picks scatter/histogram/qqplot, adapt:
   let chartConfigType = chartType === 'scatter' ? 'scatter' : 'line';
   const scales = {};
 
@@ -93,16 +93,6 @@ function renderChart(chartType) {
     };
     scales.y = {
       title: { display: true, text: 'Count' }
-    };
-  } else if (chartType === 'boxplot') {
-    chartConfigType = 'bar';
-    scales.x = {
-      type: 'category',
-      title: { display: true, text: 'Dataset(s)' }
-    };
-    scales.y = {
-      type: 'linear',
-      title: { display: true, text: 'Value' }
     };
   } else if (chartType === 'qqplot') {
     chartConfigType = 'scatter';
@@ -138,13 +128,8 @@ function renderChart(chartType) {
       plugins: {
         tooltip: {
           callbacks: {
-            // Example of custom tooltip for boxplot
             label: function(context) {
               const ds = context.dataset;
-              if (chartType === 'boxplot' && ds.tooltipStats) {
-                return ds.tooltipStats;
-              }
-              // Otherwise, default
               return `${ds.label}: ${context.formattedValue}`;
             }
           }
@@ -258,25 +243,6 @@ function addToChart() {
         type: 'bar',
         backgroundColor: chosenColor
       });
-    } else if (chartType === 'boxplot') {
-      // Quick hack: just place a single bar at x=ds.name with "y"=max, storing tooltip info
-      const sortedVals = [...numericValues].sort((a, b) => a - b);
-      const minVal = sortedVals[0];
-      const q1 = calculatePercentile(sortedVals, 25);
-      const median = calculatePercentile(sortedVals, 50);
-      const q3 = calculatePercentile(sortedVals, 75);
-      const maxVal = sortedVals[sortedVals.length - 1];
-
-      const statsStr = `Min: ${minVal}, Q1: ${q1}, Median: ${median}, Q3: ${q3}, Max: ${maxVal}`;
-
-      window.chartDatasets.push({
-        label: `${ds.name} - ${metric}`,
-        data: [{ x: ds.name, y: maxVal }],
-        backgroundColor: chosenColor,
-        borderColor: chosenColor,
-        type: 'bar',
-        tooltipStats: statsStr
-      });
     } else if (chartType === 'qqplot') {
       const qqData = buildQQPlot(numericValues);
 
@@ -319,6 +285,18 @@ function addToChart() {
   // Enable the "Clear Chart" button if needed
   const clearChartBtn = document.getElementById('clearChartBtn');
   if (clearChartBtn) clearChartBtn.disabled = false;
+
+  // Add this at the end:
+  if (indices.length > 0 && window.showVisualStats) {
+    const lastIdx = indices[indices.length - 1];
+    const lastDataset = window.allDatasets[lastIdx];
+    const metric = document.getElementById('metricSelect').value;
+    const data = lastDataset.rows
+      .map(r => getMetricValue(r, metric))
+      .filter(v => v !== null && v !== undefined);
+    const stats = calculateStatistics(data);
+    showVisualStats(stats, metric, lastDataset.name);
+  }
 }
 
 /**
@@ -339,6 +317,37 @@ function moveDataset(index, direction) {
   if (window.mainChart) {
     window.mainChart.data.datasets = window.chartDatasets;
     window.mainChart.update();
+  }
+}
+
+/**
+ * Removes a dataset from the chartDatasets array at the specified index
+ * @param {number} index - The index of the dataset to remove
+ */
+function removeDataset(index) {
+  if (index < 0 || index >= window.chartDatasets.length) return;
+  
+  // Remove the dataset at the specified index
+  window.chartDatasets.splice(index, 1);
+  
+  // Update the dataset order list
+  updateDatasetOrder();
+  
+  // Update the chart
+  if (window.mainChart) {
+    window.mainChart.data.datasets = window.chartDatasets;
+    window.mainChart.update();
+  }
+  
+  // If all datasets are removed, reset the chart state
+  if (window.chartDatasets.length === 0) {
+    const clearChartBtn = document.getElementById('clearChartBtn');
+    if (clearChartBtn) clearChartBtn.disabled = true;
+    
+    if (window.mainChart) {
+      window.mainChart.destroy();
+      window.mainChart = null;
+    }
   }
 }
 
@@ -364,20 +373,29 @@ function updateDatasetOrder() {
     const nameSpan = document.createElement('span');
     nameSpan.textContent = dataset.label;
 
-    // Up/down buttons
+    // Controls: up/down/remove buttons
     const controlsDiv = document.createElement('div');
     controlsDiv.className = 'dataset-order-controls';
 
     const upBtn = document.createElement('button');
     upBtn.textContent = '↑';
+    upBtn.title = 'Move Up';
     upBtn.addEventListener('click', () => moveDataset(index, 'up'));
 
     const downBtn = document.createElement('button');
     downBtn.textContent = '↓';
+    downBtn.title = 'Move Down';
     downBtn.addEventListener('click', () => moveDataset(index, 'down'));
+    
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Remove from Chart';
+    removeBtn.className = 'remove-dataset-btn';
+    removeBtn.addEventListener('click', () => removeDataset(index));
 
     controlsDiv.appendChild(upBtn);
     controlsDiv.appendChild(downBtn);
+    controlsDiv.appendChild(removeBtn);
 
     listItem.appendChild(colorDiv);
     listItem.appendChild(nameSpan);
@@ -442,6 +460,37 @@ function displayRawData(datasetId) {
   rawDataElement.textContent = tableContent;
 }
 
+// Add to displayRawData
+let currentPage = 0;
+const rowsPerPage = 100;
+
+function displayRawDataPage(dataset, page = 0) {
+  // Calculate start and end indices
+  const startIdx = page * rowsPerPage;
+  const endIdx = Math.min(startIdx + rowsPerPage, dataset.rows.length);
+  
+  // Update pagination controls
+  const paginationInfo = document.getElementById('rawDataPagination');
+  if (paginationInfo) {
+    paginationInfo.innerHTML = `
+      Showing rows ${startIdx+1} to ${endIdx} of ${dataset.rows.length}
+      <button id="prevPageBtn" ${page <= 0 ? 'disabled' : ''}>Previous</button>
+      <button id="nextPageBtn" ${endIdx >= dataset.rows.length ? 'disabled' : ''}>Next</button>
+    `;
+    
+    document.getElementById('prevPageBtn')?.addEventListener('click', () => {
+      if (page > 0) displayRawDataPage(dataset, page - 1);
+    });
+    
+    document.getElementById('nextPageBtn')?.addEventListener('click', () => {
+      if (endIdx < dataset.rows.length) displayRawDataPage(dataset, page + 1);
+    });
+  }
+  
+  // Display the data for the current page
+  // ...
+}
+
 // Export this function so it's available globally
 window.displayRawData = displayRawData;
 
@@ -453,3 +502,4 @@ window.clearChart = clearChart;
 window.addToChart = addToChart;
 window.moveDataset = moveDataset;
 window.updateDatasetOrder = updateDatasetOrder;
+window.removeDataset = removeDataset;

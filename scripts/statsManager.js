@@ -14,15 +14,29 @@ function getMetricValue(row, metric) {
     if (typeof row['FrameTime'] === 'number' && row['FrameTime'] > 0) {
       return 1000.0 / row['FrameTime'];
     }
-    // Try PresentMon format
-    else if (typeof row['MsBetweenPresents'] === 'number' && row['MsBetweenPresents'] > 0) {
-      return 1000.0 / row['MsBetweenPresents'];
+    // Try PresentMon format (case insensitive)
+    else {
+      // Check for MsBetweenPresents or msBetweenPresents
+      const mbpKey = Object.keys(row).find(key => 
+        key.toLowerCase() === 'msbetweenpresents');
+      
+      if (mbpKey && typeof row[mbpKey] === 'number' && row[mbpKey] > 0) {
+        return 1000.0 / row[mbpKey];
+      }
     }
     return null;
   }
   
-  // For all other metrics, direct column access
-  return (typeof row[metric] === 'number') ? row[metric] : null;
+  // For other metrics, try case-insensitive match
+  if (typeof row[metric] === 'number') {
+    return row[metric];
+  }
+  
+  // Try case-insensitive matching
+  const matchingKey = Object.keys(row).find(key => 
+    key.toLowerCase() === metric.toLowerCase());
+  
+  return (matchingKey && typeof row[matchingKey] === 'number') ? row[matchingKey] : null;
 }
 
 /**

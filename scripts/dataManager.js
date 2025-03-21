@@ -110,27 +110,50 @@ function handleFileUpload(e) {
   const files = e.target.files;
   if (!files.length) return;
 
+  let successCount = 0;
+  let errorCount = 0;
+
   Array.from(files).forEach(file => {
     const reader = new FileReader();
+    
     reader.onload = ev => {
-      const text = ev.target.result;
-      const parsedRows = parseCSV(text);
+      try {
+        const text = ev.target.result;
+        const parsedRows = parseCSV(text);
+        
+        if (parsedRows.length === 0) {
+          notify(`No valid data rows found in ${file.name}`, 'warning');
+          errorCount++;
+          return;
+        }
 
-      const datasetObj = {
-        name: file.name,
-        rows: parsedRows
-      };
-      window.allDatasets.push(datasetObj);
-      refreshDatasetLists();
+        const datasetObj = {
+          name: file.name,
+          rows: parsedRows
+        };
+        window.allDatasets.push(datasetObj);
+        successCount++;
+        
+        // Only refresh if all files have been processed
+        if (successCount + errorCount === files.length) {
+          refreshDatasetLists();
+          notify(`Loaded ${successCount} file(s). ${errorCount > 0 ? errorCount + ' file(s) had errors.' : ''}`, 
+                 errorCount > 0 ? 'warning' : 'success');
+        }
+      } catch (error) {
+        console.error(`Error parsing ${file.name}:`, error);
+        notify(`Error parsing ${file.name}: ${error.message}`, 'error');
+        errorCount++;
+      }
     };
+    
+    reader.onerror = () => {
+      notify(`Failed to read ${file.name}`, 'error');
+      errorCount++;
+    };
+    
     reader.readAsText(file);
   });
-
-  // Update metric dropdowns based on available columns
-  updateMetricDropdowns();
-  
-  // Notify the UI
-  notify(`Loaded ${e.target.files.length} file(s).`, 'success');
 }
 
 /**
@@ -319,7 +342,7 @@ function getMetricDisplayName(metric) {
   // Display name mapping
   const displayNames = {
     'FrameTime': 'Frame Time (ms)',
-    'FPS': 'Frames Per Second',
+    'FPS': 'FPS',
     'MsBetweenPresents': 'Time Between Presents (ms)',
     'MsBetweenDisplayChange': 'Time Between Display Changes (ms)',
     'MsInPresentAPI': 'Time in Present API (ms)',

@@ -773,3 +773,27 @@ pre {
 .dark-theme .credits-small {
   color: #aaa;
 }
+
+.remove-dataset-btn {
+  background-color: #ff5555;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-left: 4px;
+  
+  /* Add these properties to center the X */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  font-size: 16px;
+}
+
+.remove-dataset-btn:hover {
+  background-color: #ff0000;
+}
