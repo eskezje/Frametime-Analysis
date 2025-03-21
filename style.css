@@ -128,6 +128,40 @@ th {
     align-items: center;
 }
 
+/* Add styles for the drag-and-drop zone */
+#dropZone {
+    border: 2px dashed #ccc;
+    padding: 20px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+#dropZone.dragover {
+    border-color: #3498db;
+    background-color: rgba(52, 152, 219, 0.1);
+}
+
+.dark-theme #dropZone {
+    border-color: #555;
+}
+
+.dark-theme #dropZone.dragover {
+    border-color: #4fc3f7;
+    background-color: rgba(79, 195, 247, 0.1);
+}
+
+/* Hide the actual file input */
+#fileInput {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+
 .file-input-label {
     padding: 10px 15px;
     background-color: #3498db;
@@ -796,4 +830,35 @@ pre {
 
 .remove-dataset-btn:hover {
   background-color: #ff0000;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-top: 15px;
+  padding: 10px 0;
+}
+
+.pagination-controls button {
+  padding: 5px 10px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pagination-controls button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.dark-theme .pagination-controls button {
+  background-color: #4fc3f7;
+}
+
+.dark-theme .pagination-controls button:disabled {
+  background-color: #444;
 }

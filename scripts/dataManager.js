@@ -122,7 +122,12 @@ function handleFileUpload(e) {
         const parsedRows = parseCSV(text);
         
         if (parsedRows.length === 0) {
-          notify(`No valid data rows found in ${file.name}`, 'warning');
+          // Check if notify function exists before calling it
+          if (typeof window.notify === 'function') {
+            window.notify(`No valid data rows found in ${file.name}`, 'warning');
+          } else {
+            console.warn(`No valid data rows found in ${file.name}`);
+          }
           errorCount++;
           return;
         }
@@ -137,18 +142,28 @@ function handleFileUpload(e) {
         // Only refresh if all files have been processed
         if (successCount + errorCount === files.length) {
           refreshDatasetLists();
-          notify(`Loaded ${successCount} file(s). ${errorCount > 0 ? errorCount + ' file(s) had errors.' : ''}`, 
-                 errorCount > 0 ? 'warning' : 'success');
+          if (typeof window.notify === 'function') {
+            window.notify(`Loaded ${successCount} file(s). ${errorCount > 0 ? errorCount + ' file(s) had errors.' : ''}`, 
+                       errorCount > 0 ? 'warning' : 'success');
+          } else {
+            console.log(`Loaded ${successCount} file(s). ${errorCount > 0 ? errorCount + ' file(s) had errors.' : ''}`);
+          }
         }
       } catch (error) {
         console.error(`Error parsing ${file.name}:`, error);
-        notify(`Error parsing ${file.name}: ${error.message}`, 'error');
+        if (typeof window.notify === 'function') {
+          window.notify(`Error parsing ${file.name}: ${error.message}`, 'error');
+        }
         errorCount++;
       }
     };
     
     reader.onerror = () => {
-      notify(`Failed to read ${file.name}`, 'error');
+      if (typeof window.notify === 'function') {
+        window.notify(`Failed to read ${file.name}`, 'error');
+      } else {
+        console.error(`Failed to read ${file.name}`);
+      }
       errorCount++;
     };
     
@@ -281,7 +296,7 @@ function updateMetricDropdowns() {
   // Get all metric select elements
   const metricSelects = [
     document.getElementById('metricSelect'),
-    // Add other metric dropdowns if you have them
+    // Add other metric dropdowns if you have them Add test metric select
   ];
   
   metricSelects.forEach(select => {

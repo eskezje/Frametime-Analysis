@@ -338,3 +338,6 @@ function notify(msg, type = 'info') {
     setTimeout(() => notification.remove(), 300);
   });
 }
+
+// Export notify to the global scope
+window.notify = notify;

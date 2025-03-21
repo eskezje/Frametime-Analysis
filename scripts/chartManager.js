@@ -363,7 +363,7 @@ function updateDatasetOrder() {
   window.chartDatasets.forEach((dataset, index) => {
     const listItem = document.createElement('li');
     listItem.className = 'dataset-order-item';
-    listItem.dataset.index = index;
+    listItem.dataset.index = index; // Store the current index
 
     // A small color indicator
     const colorDiv = document.createElement('div');
@@ -380,18 +380,27 @@ function updateDatasetOrder() {
     const upBtn = document.createElement('button');
     upBtn.textContent = '↑';
     upBtn.title = 'Move Up';
-    upBtn.addEventListener('click', () => moveDataset(index, 'up'));
+    // Use a closure to capture the current index
+    upBtn.addEventListener('click', (function(currentIndex) {
+      return function() { moveDataset(currentIndex, 'up'); };
+    })(index));
 
     const downBtn = document.createElement('button');
     downBtn.textContent = '↓';
     downBtn.title = 'Move Down';
-    downBtn.addEventListener('click', () => moveDataset(index, 'down'));
+    // Use a closure to capture the current index
+    downBtn.addEventListener('click', (function(currentIndex) {
+      return function() { moveDataset(currentIndex, 'down'); };
+    })(index));
     
     const removeBtn = document.createElement('button');
     removeBtn.textContent = '×';
     removeBtn.title = 'Remove from Chart';
     removeBtn.className = 'remove-dataset-btn';
-    removeBtn.addEventListener('click', () => removeDataset(index));
+    // Use a closure to capture the current index
+    removeBtn.addEventListener('click', (function(currentIndex) {
+      return function() { removeDataset(currentIndex); };
+    })(index));
 
     controlsDiv.appendChild(upBtn);
     controlsDiv.appendChild(downBtn);
@@ -442,53 +451,89 @@ function displayRawData(datasetId) {
   // Get all available column names from the first row
   const columns = Object.keys(dataset.rows[0] || {});
   
-  // Create a header row
-  let tableContent = columns.join('\t') + '\n';
-  tableContent += columns.map(() => '--------').join('\t') + '\n';
-  
-  // Add data rows (limit to first 1000 for performance)
-  const maxRows = Math.min(1000, dataset.rows.length);
-  for (let i = 0; i < maxRows; i++) {
-    const row = dataset.rows[i];
-    tableContent += columns.map(col => row[col] !== undefined ? row[col] : 'N/A').join('\t') + '\n';
-  }
-  
-  if (dataset.rows.length > maxRows) {
-    tableContent += `\n... and ${dataset.rows.length - maxRows} more rows (only showing first ${maxRows})`;
-  }
-  
-  rawDataElement.textContent = tableContent;
+  // Display the first page of data
+  displayRawDataPage(dataset, columns, 0);
 }
 
-// Add to displayRawData
+// Current page for raw data pagination
 let currentPage = 0;
 const rowsPerPage = 100;
 
-function displayRawDataPage(dataset, page = 0) {
+/**
+ * Displays a specific page of raw data
+ * @param {Object} dataset - The dataset to display
+ * @param {Array} columns - Array of column names
+ * @param {number} page - Page number to display (0-based)
+ */
+function displayRawDataPage(dataset, columns, page = 0) {
+  const rawDataElement = document.getElementById('rawData');
+  if (!rawDataElement) return;
+  
+  // Update current page tracker
+  currentPage = page;
+  
   // Calculate start and end indices
   const startIdx = page * rowsPerPage;
   const endIdx = Math.min(startIdx + rowsPerPage, dataset.rows.length);
   
-  // Update pagination controls
-  const paginationInfo = document.getElementById('rawDataPagination');
-  if (paginationInfo) {
-    paginationInfo.innerHTML = `
-      Showing rows ${startIdx+1} to ${endIdx} of ${dataset.rows.length}
-      <button id="prevPageBtn" ${page <= 0 ? 'disabled' : ''}>Previous</button>
-      <button id="nextPageBtn" ${endIdx >= dataset.rows.length ? 'disabled' : ''}>Next</button>
+  // Create a header row
+  let tableContent = columns.join('\t') + '\n';
+  tableContent += columns.map(() => '--------').join('\t') + '\n';
+  
+  // Add data rows for current page
+  for (let i = startIdx; i < endIdx; i++) {
+    const row = dataset.rows[i];
+    tableContent += columns.map(col => row[col] !== undefined ? row[col] : 'N/A').join('\t') + '\n';
+  }
+  
+  // Add pagination info
+  tableContent += `\n\nShowing rows ${startIdx+1} to ${endIdx} of ${dataset.rows.length}`;
+  
+  // Add pagination controls if dataset has more rows than one page
+  if (dataset.rows.length > rowsPerPage) {
+    tableContent += '\n\n';
+    if (page > 0) {
+      tableContent += '[Previous Page] ';
+    }
+    if (endIdx < dataset.rows.length) {
+      tableContent += '[Next Page]';
+    }
+    
+    // Add pagination explanation
+    tableContent += '\n(Use the Raw Data Pagination controls below)';
+    
+    // Create pagination buttons if they don't exist
+    let paginationControls = document.getElementById('rawDataPagination');
+    if (!paginationControls) {
+      paginationControls = document.createElement('div');
+      paginationControls.id = 'rawDataPagination';
+      paginationControls.className = 'pagination-controls';
+      rawDataElement.parentNode.insertBefore(paginationControls, rawDataElement.nextSibling);
+    }
+    
+    paginationControls.innerHTML = `
+      <button id="prevPageBtn" ${page <= 0 ? 'disabled' : ''}>Previous Page</button>
+      <span>Page ${page + 1}</span>
+      <button id="nextPageBtn" ${endIdx >= dataset.rows.length ? 'disabled' : ''}>Next Page</button>
     `;
     
+    // Add event listeners to pagination buttons
     document.getElementById('prevPageBtn')?.addEventListener('click', () => {
-      if (page > 0) displayRawDataPage(dataset, page - 1);
+      if (page > 0) displayRawDataPage(dataset, columns, page - 1);
     });
     
     document.getElementById('nextPageBtn')?.addEventListener('click', () => {
-      if (endIdx < dataset.rows.length) displayRawDataPage(dataset, page + 1);
+      if (endIdx < dataset.rows.length) displayRawDataPage(dataset, columns, page + 1);
     });
+  } else {
+    // Remove pagination controls if not needed
+    const paginationControls = document.getElementById('rawDataPagination');
+    if (paginationControls) {
+      paginationControls.remove();
+    }
   }
   
-  // Display the data for the current page
-  // ...
+  rawDataElement.textContent = tableContent;
 }
 
 // Export this function so it's available globally
