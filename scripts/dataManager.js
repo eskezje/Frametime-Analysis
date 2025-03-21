@@ -13,29 +13,45 @@ function clearAllDatasets() {
 }
 
 /**
- * Reads CSV text into an array of objects, handling numeric conversion and "NA" values.
+ * Reads CSV text into an array of objects, handling quoted strings, multiple delimiters, and line endings.
  * @param {string} text - The CSV file contents as a string.
  * @returns {Array<Object>} The parsed rows as an array of objects.
  */
 function parseCSV(text) {
+  // Normalize line endings (handle CRLF, CR, LF)
+  text = text.replace(/\r\n|\r|\n/g, '\n');
   const lines = text.trim().split('\n');
   if (!lines.length) return [];
 
-  const headers = lines[0].split(',');
+  // Auto-detect delimiter (comma, tab, semicolon)
+  const firstLine = lines[0];
+  let delimiter = ',';
+  const delimiters = [',', '\t', ';'];
+  const counts = delimiters.map(d => (firstLine.match(new RegExp(d, 'g')) || []).length);
+  const maxIndex = counts.indexOf(Math.max(...counts));
+  if (maxIndex >= 0) delimiter = delimiters[maxIndex];
+
+  // Parse header row
+  const headers = parseCSVLine(firstLine, delimiter);
   const result = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    const values = line.split(',');
+    
+    const values = parseCSVLine(line, delimiter);
+    if (values.length !== headers.length) {
+      console.warn(`Line ${i+1} has ${values.length} fields, expected ${headers.length}. Skipping.`);
+      continue;
+    }
 
     const row = {};
     for (let j = 0; j < headers.length; j++) {
-      let val = values[j] !== undefined ? values[j].trim() : null;
-      if (val === 'NA') val = null;
+      let val = values[j];
+      if (val === 'NA' || val === '') val = null;
 
       const asNum = parseFloat(val);
-      if (!isNaN(asNum) && val !== null && val !== '') {
+      if (!isNaN(asNum) && val !== null) {
         row[headers[j]] = asNum; // store as number
       } else {
         row[headers[j]] = val;   // store as string/null
@@ -46,6 +62,45 @@ function parseCSV(text) {
 
   return result;
 }
+
+/**
+ * Parse a single CSV line, handling quoted fields with commas
+ * @param {string} line - Single line from CSV
+ * @param {string} delimiter - Delimiter character
+ * @returns {string[]} Array of field values
+ */
+function parseCSVLine(line, delimiter) {
+  const result = [];
+  let inQuotes = false;
+  let currentValue = '';
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === delimiter && !inQuotes) {
+      result.push(currentValue.trim());
+      currentValue = '';
+    } else {
+      currentValue += char;
+    }
+  }
+  
+  // Add the last field
+  result.push(currentValue.trim());
+  
+  // Remove quotes from quoted fields
+  return result.map(val => {
+    if (val.startsWith('"') && val.endsWith('"')) {
+      return val.substring(1, val.length - 1);
+    }
+    return val;
+  });
+}
+
+// Add this to the window exports
+window.parseCSVLine = parseCSVLine;
 
 /**
  * Handles file selection event for CSV/TXT uploads,
@@ -290,3 +345,4 @@ window.refreshDatasetLists = refreshDatasetLists;
 window.detectAvailableMetrics = detectAvailableMetrics;
 window.updateMetricDropdowns = updateMetricDropdowns;
 window.getMetricDisplayName = getMetricDisplayName;
+window.parseCSVLine = parseCSVLine;
