@@ -8,6 +8,22 @@
  * @returns {number|null} The numeric value, or null if unavailable.
  */
 function getMetricValue(row, metric) {
+  // Handle FrameTime specially - can come from different sources
+  if (metric === 'FrameTime') {
+    // Try standard format first
+    if (typeof row['FrameTime'] === 'number') {
+      return row['FrameTime'];
+    }
+    // Try PresentMon format (case insensitive)
+    const mbpKey = Object.keys(row).find(key => 
+      key.toLowerCase() === 'msbetweenpresents');
+    
+    if (mbpKey && typeof row[mbpKey] === 'number') {
+      return row[mbpKey]; // Return MsBetweenPresents as FrameTime
+    }
+    return null;
+  }
+  
   // Handle FPS calculation specially as it can be derived from different frametime metrics
   if (metric === 'FPS') {
     // Try standard format first
