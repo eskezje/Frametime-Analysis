@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Frame Timing Data Analyzer</title>
+
+  <!-- External CSS -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Third-Party Libraries (Load first) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jstat/1.9.6/jstat.min.js"></script>
+
+  <!-- Our Scripts (Load in a sensible order) -->
+  <!-- 1) dataManager.js (handles uploading data, storing in allDatasets) -->
+  <script src="scripts/dataManager.js"></script>
+  <!-- 2) statsManager.js (provides getMetricValue, calculateStatistics, etc.) -->
+  <script src="scripts/statsManager.js"></script>
+  <!-- 3) testManager.js (runs T-tests, Wilcoxon, etc.) -->
+  <script src="scripts/testManager.js"></script>
+  <!-- 4) chartManager.js (handles building chartDatasets, rendering with Chart.js) -->
+  <script src="scripts/chartManager.js"></script>
+  <!-- 5) main.js (wires everything together) -->
+  <script src="scripts/main.js"></script>
+</head>
+
+<body>
+  <header>
+    <div class="header-content">
+      <h1>Frame Timing Data Analyzer</h1>
+      <div class="header-actions">
+        <a
+          href="https://discord.gg/Uhum2YNgSU"
+          target="_blank"
+          rel="noopener"
+          class="discord-button"
+        >
+          <!-- Discord SVG Icon -->
+          Join our Discord
+        </a>
+        <a
+          href="https://github.com/eskezje"
+          target="_blank"
+          rel="noopener"
+          class="github-button"
+        >
+          <!-- GitHub SVG Icon -->
+          GitHub
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div id="notification-container"><!-- Notifications appear here --></div>
+
+  <div class="container">
+    <div class="panel">
+      <!-- File input panel -->
+      <div class="file-input-container">
+        <div class="control-panel-heading">
+          <h3>Dataset Management</h3>
+        </div>
+        <div class="file-input-wrapper" id="dropZone">
+          <label for="fileInput" class="file-input-label" tabindex="0">
+            Upload CSV/TXT Files
+          </label>
+          <input
+            type="file"
+            id="fileInput"
+            accept=".csv,.txt"
+            multiple
+            aria-label="Upload CSV or TXT files"
+          />
+          <div class="file-status">
+            Drag files here or click to upload
+          </div>
+        </div>
+        <div id="uploadProgress" class="progress-container hidden">
+          <div class="progress-bar"></div>
+        </div>
+      </div>
+
+      <!-- Uploaded Datasets list -->
+      <div class="card">
+        <div class="control-panel-heading">
+          <h3>Uploaded Datasets</h3>
+          <button id="clearAllDatasets" class="secondary-button" disabled>Clear All</button>
+        </div>
+        <div id="datasetsEmpty" class="alert info hidden">
+          <p>No datasets uploaded yet. Upload some CSV/TXT files to get started.</p>
+        </div>
+        <ul id="datasetList" class="dataset-list"></ul>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <div class="tab active" data-tab="visualization">Visualization</div>
+        <div class="tab" data-tab="statistics">Statistics</div>
+        <div class="tab" data-tab="tests">Statistical Tests</div>
+        <div class="tab" data-tab="raw">Raw Data</div>
+      </div>
+
+      <!-- Visualization Tab -->
+      <div id="visualization" class="tab-content">
+        <div class="controls">
+          <div class="control-group">
+            <label for="datasetSelect">Select Dataset(s):</label>
+            <select id="datasetSelect" multiple></select>
+          </div>
+
+          <div class="control-group">
+            <label for="metricSelect">Metric:</label>
+            <select id="metricSelect">
+              <option value="FrameTime">FrameTime</option>
+              <option value="CPUBusy">CPUBusy</option>
+              <option value="CPUWait">CPUWait</option>
+              <option value="GPULatency">GPULatency</option>
+              <option value="GPUTime">GPUTime</option>
+              <option value="GPUBusy">GPUBusy</option>
+              <option value="GPUWait">GPUWait</option>
+              <option value="DisplayLatency">DisplayLatency</option>
+              <option value="DisplayedTime">DisplayedTime</option>
+              <option value="AnimationError">AnimationError</option>
+              <option value="ClickToPhotonLatency">ClickToPhotonLatency</option>
+              <option value="FPS">FPS (Derived from FrameTime)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label for="chartTypeSelect">Chart Type:</label>
+            <select id="chartTypeSelect">
+              <option value="line">Line Chart</option>
+              <option value="scatter">Scatter Plot</option>
+              <option value="histogram">Histogram</option>
+              <option value="boxplot">Box Plot</option>
+              <option value="qqplot">Q-Q Plot</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label for="colorSelect">Color:</label>
+            <div class="color-picker-container">
+              <input type="color" id="colorSelect" value="#4bc0c0" />
+              <div class="color-preview" id="colorPreview" style="background-color: #4bc0c0;"></div>
+              <button id="randomColorBtn" class="secondary-button" aria-label="Generate random color">
+                Random
+              </button>
+            </div>
+          </div>
+
+          <button id="addToChartBtn">Add to Chart</button>
+          <button id="clearChartBtn" disabled>Clear Chart</button>
+        </div>
+
+        <div class="card">
+          <h3>Chart Datasets Order</h3>
+          <p>Drag to reorder datasets. Top items will appear on top in the chart.</p>
+          <ul id="datasetOrderList" class="dataset-order-list"></ul>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+          <div>
+            <button id="resetZoomBtn" class="secondary-button">Reset Zoom</button>
+          </div>
+          <div class="chart-height-control">
+            <label for="chartHeight">Height:</label>
+            <input type="range" id="chartHeight" min="200" max="800" value="400" style="width: 100px;">
+            <span id="chartHeightValue">400px</span>
+          </div>
+        </div>
+
+        <div class="chart-container" id="chartContainer">
+          <canvas id="mainChart"></canvas>
+        </div>
+
+        <div class="card">
+          <h3>Statistics for Last Added Metric</h3>
+          <div id="visualStats"></div>
+        </div>
+      </div>
+
+      <!-- Statistics Tab -->
+      <div id="statistics" class="tab-content hidden">
+        <div class="controls">
+          <div class="control-group">
+            <label for="statDatasetSelect">Select Dataset:</label>
+            <select id="statDatasetSelect"></select>
+          </div>
+
+          <div class="control-group">
+            <label>Select Metrics:</label>
+            <div class="toggle-group" id="statMetricsGroup">
+              <div class="toggle-button active" data-metric="FrameTime">FrameTime</div>
+              <div class="toggle-button" data-metric="CPUWait">CPUWait</div>
+              <div class="toggle-button" data-metric="CPUBusy">CPUBusy</div>
+              <div class="toggle-button" data-metric="GPULatency">GPULatency</div>
+              <div class="toggle-button" data-metric="GPUTime">GPUTime</div>
+              <div class="toggle-button" data-metric="GPUBusy">GPUBusy</div>
+              <div class="toggle-button" data-metric="GPUWait">GPUWait</div>
+              <div class="toggle-button" data-metric="DisplayLatency">DisplayLatency</div>
+              <div class="toggle-button" data-metric="DisplayedTime">DisplayedTime</div>
+              <div class="toggle-button" data-metric="AnimationError">AnimationError</div>
+              <div class="toggle-button" data-metric="ClickToPhotonLatency">ClickToPhotonLatency</div>
+              <div class="toggle-button" data-metric="FPS">FPS</div>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>Statistics:</label>
+            <div class="toggle-group" id="statsTypeGroup">
+              <div class="toggle-button active" data-stat="max">Max</div>
+              <div class="toggle-button active" data-stat="avg">Avg</div>
+              <div class="toggle-button active" data-stat="min">Min</div>
+              <div class="toggle-button active" data-stat="p1">1%ile</div>
+              <div class="toggle-button" data-stat="p01">0.1%ile</div>
+              <div class="toggle-button" data-stat="p001">0.01%ile</div>
+              <div class="toggle-button active" data-stat="low1">1% Low</div>
+              <div class="toggle-button" data-stat="low01">0.1% Low</div>
+              <div class="toggle-button" data-stat="low001">0.01% Low</div>
+              <div class="toggle-button active" data-stat="stdev">STDEV</div>
+            </div>
+          </div>
+
+          <button id="calculateStatsBtn">Calculate Statistics</button>
+          <button id="visualizeStatsBtn" class="secondary-button">Visualize Statistics</button>
+        </div>
+
+        <div class="stats-visualization-container hidden" id="statsVisualizationContainer">
+          <canvas id="statsChart"></canvas>
+          <div class="chart-controls">
+            <button id="closeStatsVisualizationBtn">Close Visualization</button>
+          </div>
+        </div>
+
+        <table id="statsTable" class="enhanced-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th class="stat-col" data-stat="max">Max</th>
+              <th class="stat-col" data-stat="avg">Avg</th>
+              <th class="stat-col" data-stat="min">Min</th>
+              <th class="stat-col" data-stat="p1">1%ile</th>
+              <th class="stat-col" data-stat="p01">0.1%ile</th>
+              <th class="stat-col" data-stat="p001">0.01%ile</th>
+              <th class="stat-col" data-stat="low1">1% Low</th>
+              <th class="stat-col" data-stat="low01">0.1% Low</th>
+              <th class="stat-col" data-stat="low001">0.01% Low</th>
+              <th class="stat-col" data-stat="stdev">STDEV</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <!-- Tests Tab -->
+      <div id="tests" class="tab-content hidden">
+        <div class="controls">
+          <div class="control-group">
+            <label for="testSelect">Select Test:</label>
+            <select id="testSelect">
+              <option value="ttest">Paired t-test (Cohen's d)</option>
+              <option value="wilcoxon">Wilcoxon Signed-Rank (Rank-Biserial)</option>
+              <option value="shapiro">Shapiro-Wilk Normality Test</option>
+              <option value="variance">Variance Test (F-test)</option>
+              <option value="framepacing">Frame Pacing Analysis</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label for="testMetricSelect">Metric:</label>
+            <select id="testMetricSelect">
+              <option value="FrameTime">FrameTime</option>
+              <option value="CPUWait">CPUWait</option>
+              <option value="CPUBusy">CPUBusy</option>
+              <option value="GPULatency">GPULatency</option>
+              <option value="GPUTime">GPUTime</option>
+              <option value="GPUBusy">GPUBusy</option>
+              <option value="GPUWait">GPUWait</option>
+              <option value="DisplayLatency">DisplayLatency</option>
+              <option value="DisplayedTime">DisplayedTime</option>
+              <option value="AnimationError">AnimationError</option>
+              <option value="ClickToPhotonLatency">ClickToPhotonLatency</option>
+              <option value="FPS">FPS</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label for="compareSelect">Compare:</label>
+            <select id="compareSelect">
+              <option value="dataset">Two uploaded datasets</option>
+              <option value="value">Single dataset vs. fixed value</option>
+            </select>
+          </div>
+
+          <div id="testDatasetContainer" class="control-group">
+            <label for="datasetASelect">Dataset A:</label>
+            <select id="datasetASelect"></select>
+          </div>
+
+          <div id="testDatasetContainer2" class="control-group">
+            <label for="datasetBSelect">Dataset B:</label>
+            <select id="datasetBSelect"></select>
+          </div>
+
+          <div id="compareValueContainer" class="control-group hidden">
+            <label for="compareValue">Fixed Value:</label>
+            <input type="number" id="compareValue" value="16.67" step="0.01" />
+          </div>
+
+          <button id="runTestBtn">Run Test</button>
+        </div>
+
+        <div id="testResults" class="result-panel hidden">
+          <h3>Test Results</h3>
+          <div id="testResultsContent"></div>
+          <div id="testInterpretation" class="test-interpretation"></div>
+        </div>
+      </div>
+
+      <!-- Raw Data Tab -->
+      <div id="raw" class="tab-content hidden">
+        <div class="controls">
+          <div class="control-group">
+            <label for="rawDatasetSelect">Select Dataset:</label>
+            <select id="rawDatasetSelect"></select>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Raw Data</h3>
+          <div class="raw-data-info">Select a dataset to view its raw content.</div>
+          <pre id="rawData"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A toggle button for theme (if desired) -->
+  <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode">
+    <span id="themeIcon">🌙</span>
+  </button>
+</body>
+</html>
