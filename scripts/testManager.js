@@ -1599,6 +1599,7 @@ function visualizeFrameTimeStability(dataA, dataB, resultsDiv) {
 
 /**
  * Calculates transitions between consecutive frames and identifies anomalies.
+ * Optimized version for large datasets.
  * 
  * @param {number[]} data - Array of frame times
  * @returns {Object} Statistics about the transitions
@@ -1607,6 +1608,11 @@ function calculateTransitions(data) {
   if (!data || data.length < 2) {
     return { diffs: [], repeatedFrames: 0, outOfSequence: 0 };
   }
+  
+  // Calculate median only once upfront instead of for each frame
+  const sortedData = [...data].sort((a, b) => a - b);
+  const medianFrametime = calculatePercentile(sortedData, 50);
+  const outlierThreshold = 3 * medianFrametime;
   
   const diffs = [];
   let repeatedFrames = 0;
@@ -1623,7 +1629,8 @@ function calculateTransitions(data) {
     }
     
     // Potential frame sequence issue (e.g., very large jumps)
-    if (diff > 3 * calculatePercentile([...data].sort((a, b) => a - b), 50)) {
+    // Use pre-calculated threshold instead of recalculating for each frame
+    if (diff > outlierThreshold) {
       outOfSequence++;
     }
   }
