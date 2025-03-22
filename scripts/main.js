@@ -341,3 +341,34 @@ function notify(msg, type = 'info') {
 
 // Export notify to the global scope
 window.notify = notify;
+
+// Add a helper function to properly calculate and display stats for a dataset and metric
+window.calculateAndShowStats = function(datasetId, metric) {
+  // Validate inputs
+  if (typeof datasetId === 'undefined' || datasetId === '' || typeof metric !== 'string') {
+    console.error('Invalid arguments to calculateAndShowStats:', datasetId, metric);
+    return;
+  }
+  
+  // Get the dataset
+  const ds = window.allDatasets[datasetId];
+  if (!ds) {
+    console.error('Dataset not found:', datasetId);
+    return;
+  }
+  
+  // Get the values and calculate statistics
+  const numericValues = ds.rows.map(r => getMetricValue(r, metric)).filter(v => typeof v === 'number');
+  if (numericValues.length === 0) {
+    console.error('No valid numeric values found for metric:', metric);
+    return;
+  }
+  
+  // Calculate stats with the proper metric name for FPS detection
+  const stats = calculateStatistics(numericValues, metric);
+  
+  // Display the stats
+  showVisualStats(stats, metric, ds.name);
+  
+  return stats;
+};

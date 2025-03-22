@@ -294,7 +294,7 @@ function addToChart() {
     const data = lastDataset.rows
       .map(r => getMetricValue(r, metric))
       .filter(v => v !== null && v !== undefined);
-    const stats = calculateStatistics(data);
+    const stats = calculateStatistics(data, metric || 'FrameTime');
     showVisualStats(stats, metric, lastDataset.name);
   }
 }
