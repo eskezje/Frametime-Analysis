@@ -166,43 +166,86 @@ function analyzeStuttering(frametimes) {
 }
 
 /**
- * Analyzes frame pacing by looking at consecutive frametime differences.
- * The 'consistency' is 100% if every frame length is the same.
+ * Analyzes frame pacing in a general, robust way using median-based statistics.
+ * Works reliably across any framerate (30, 60, 144, 250, etc.) without bias.
  * 
- * @param {number[]} frametimes 
- * @returns {{consistency:number, avgTransition:number, stdevTransition:number, badTransitions:Array}}
+ * @param {number[]} frametimes - Array of per-frame durations (ms)
+ * @returns {{consistency:number, medianFrametime:number, madFrametime:number, 
+ *            medianTransition:number, madTransition:number, badTransitions:Array}}
  */
 function analyzeFramePacing(frametimes) {
   if (frametimes.length < 3) {
-    return { consistency: 0, avgTransition: 0, stdevTransition: 0, badTransitions: [] };
+    return {
+      consistency: 0,
+      medianFrametime: 0,
+      madFrametime: 0,
+      medianTransition: 0, 
+      madTransition: 0,
+      stdevTransition: 0, // keep for backward compatibility
+      avgTransition: 0,   // keep for backward compatibility
+      badTransitions: []
+    };
   }
 
-  // Consecutive frame deltas
+  // 1. Calculate median frametime (robust measure of "typical" performance)
+  const sorted = [...frametimes].sort((a, b) => a - b);
+  const medianFT = calculatePercentile(sorted, 50);
+
+  // 2. Compute relative deviations: (|t - median| / median)
+  const relDeviations = frametimes.map(t => Math.abs(t - medianFT) / medianFT);
+
+  // 3. Get the median of these relative deviations
+  const medianRelDev = calculatePercentile([...relDeviations].sort((a, b) => a - b), 50);
+
+  // 4. Calculate MAD of the raw frametimes
+  const absDeviationsFromMedian = frametimes.map(t => Math.abs(t - medianFT));
+  const sortedDevs = [...absDeviationsFromMedian].sort((a, b) => a - b);
+  const madFT = calculatePercentile(sortedDevs, 50);
+
+  // 5. Compute consecutive diffs, then median + MAD for transitions
   const diffs = [];
   for (let i = 1; i < frametimes.length; i++) {
     diffs.push(Math.abs(frametimes[i] - frametimes[i - 1]));
   }
+  
+  const sortedDiffs = [...diffs].sort((a, b) => a - b);
+  const medianDiff = calculatePercentile(sortedDiffs, 50);
+  
+  const absDeviationsDiff = diffs.map(d => Math.abs(d - medianDiff));
+  const sortedDiffDevs = [...absDeviationsDiff].sort((a, b) => a - b);
+  const madDiff = calculatePercentile(sortedDiffDevs, 50);
 
+  // Also calculate standard stats for backward compatibility
   const avgDiff = jStat.mean(diffs);
   const stdevDiff = jStat.stdev(diffs);
-  const consistency = 100 - Math.min(100, (stdevDiff / avgDiff) * 100);
 
-  // Identify big jumps (2x average)
+  // 6. Define consistency as a function of medianRelDev
+  // Tuned with alpha parameter for sensitivity
+  const alpha = 3.0; 
+  let consistency = 100 * (1 - Math.min(1, alpha * medianRelDev));
+  consistency = Math.max(0, Math.min(100, consistency)); // clamp to [0, 100]
+
+  // 7. Identify large transitions if diff is > K * medianDiff
+  const K = 2.5;
   const badTransitions = [];
   diffs.forEach((diff, i) => {
-    if (diff > avgDiff * 2) {
+    if (diff > K * medianDiff) {
       badTransitions.push({
-        index: i + 1,  // i+1 since diffs[0] is between frame 0 and 1
+        index: i + 1,  // i+1 -> transition from frame i to frame i+1
         value: diff,
-        ratio: diff / avgDiff
+        ratio: diff / medianDiff  // keep same property name for compatibility
       });
     }
   });
 
   return {
-    consistency,
-    avgTransition: avgDiff,
-    stdevTransition: stdevDiff,
+    consistency: Math.round(consistency * 100) / 100, // round to 2 decimal places
+    medianFrametime: medianFT,
+    madFrametime: madFT,
+    medianTransition: medianDiff,
+    madTransition: madDiff,
+    avgTransition: avgDiff,      // keep for backward compatibility
+    stdevTransition: stdevDiff,  // keep for backward compatibility
     badTransitions
   };
 }
