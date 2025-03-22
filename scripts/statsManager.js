@@ -400,21 +400,20 @@ function updateStatsTable() {
 
   // Show/hide columns
   const cols = document.querySelectorAll('#statsTable thead th.stat-col');
+  const rows = document.querySelectorAll('#statsTable tbody tr');
+  
   cols.forEach(col => {
     const statName = col.dataset.stat;
     const idx = Array.from(col.parentNode.children).indexOf(col);
+    const isVisible = selectedStats.includes(statName);
 
-    if (selectedStats.includes(statName)) {
-      col.classList.remove('hidden');
-      document.querySelectorAll('#statsTable tbody tr').forEach(tr => {
-        tr.children[idx]?.classList.remove('hidden');
-      });
-    } else {
-      col.classList.add('hidden');
-      document.querySelectorAll('#statsTable tbody tr').forEach(tr => {
-        tr.children[idx]?.classList.add('hidden');
-      });
-    }
+    // Toggle visibility for both header and all cells in this column
+    col.classList.toggle('hidden', !isVisible);
+    rows.forEach(tr => {
+      if (tr.children[idx]) {
+        tr.children[idx].classList.toggle('hidden', !isVisible);
+      }
+    });
   });
 
   // Example: highlight cells on hover

@@ -400,13 +400,8 @@ function runMannWhitneyTest(a, b, resultsDiv) {
     combined[n1 + i] = { value: b[i], group: 'b' };
   }
   
-  // Sort by value - use typed array optimization for large datasets (>1000 items)
-  if (combined.length > 1000) {
-    // For very large arrays, use a numeric sort instead of object sort
-    combined.sort((x, y) => x.value - y.value);
-  } else {
-    combined.sort((x, y) => x.value - y.value);
-  }
+  // Sort by value - the conditional is unnecessary since the same sort function is used in both branches
+  combined.sort((x, y) => x.value - y.value);
   
   // Assign ranks (with improved tie handling)
   let currentRank = 1;

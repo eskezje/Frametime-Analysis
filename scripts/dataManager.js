@@ -99,9 +99,6 @@ function parseCSVLine(line, delimiter) {
   });
 }
 
-// Add this to the window exports
-window.parseCSVLine = parseCSVLine;
-
 /**
  * Handles file selection event for CSV/TXT uploads,
  * reads each file, parses the data, and stores it in allDatasets.

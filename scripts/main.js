@@ -231,12 +231,9 @@ function updateColorPreview() {
 
 // Random color generator
 function randomColor() {
-  const r = Math.floor(30 + Math.random() * 190);
-  const g = Math.floor(30 + Math.random() * 190);
-  const b = Math.floor(30 + Math.random() * 190);
-  return `#${r.toString(16).padStart(2, '0')
-           }${g.toString(16).padStart(2, '0')
-           }${b.toString(16).padStart(2, '0')}`;
+  // Helper function to generate a random color component between 30-220
+  const randomComponent = () => Math.floor(30 + Math.random() * 190).toString(16).padStart(2, '0');
+  return `#${randomComponent()}${randomComponent()}${randomComponent()}`;
 }
 
 // Chart height change
