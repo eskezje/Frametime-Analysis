@@ -191,55 +191,9 @@ function refreshDatasetLists() {
     window.allDatasets.length > 0
   );
 
-  // Update the <select> in Visualization tab
-  const datasetSelect = document.getElementById('datasetSelect');
-  datasetSelect.innerHTML = '';
-  window.allDatasets.forEach((ds, i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = ds.name;
-    datasetSelect.appendChild(opt);
-  });
-
-  // Update the <select> in Statistics tab
-  const statSelect = document.getElementById('statDatasetSelect');
-  statSelect.innerHTML = '';
-  window.allDatasets.forEach((ds, i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = ds.name;
-    statSelect.appendChild(opt);
-  });
-
-  // Update the <select> elements in Tests tab
-  const dsA = document.getElementById('datasetASelect');
-  const dsB = document.getElementById('datasetBSelect');
-  [dsA, dsB].forEach(sel => {
-    sel.innerHTML = '';
-    window.allDatasets.forEach((ds, i) => {
-      const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = ds.name;
-      sel.appendChild(opt);
-    });
-  });
-  
-  // Add this to update the raw data selector
-  const rawDataSelect = document.getElementById('rawDatasetSelect');
-  if (rawDataSelect) {
-    rawDataSelect.innerHTML = '';
-    window.allDatasets.forEach((ds, i) => {
-      const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = ds.name;
-      rawDataSelect.appendChild(opt);
-    });
-    
-    // If we have at least one dataset, trigger displayRawData for the first one
-    if (window.allDatasets.length > 0 && typeof window.displayRawData === 'function') {
-      rawDataSelect.value = 0;
-      window.displayRawData(0);
-    }
+  // Use the centralized function from main.js to update all selects
+  if (typeof window.populateAllDatasetSelects === 'function') {
+    window.populateAllDatasetSelects();
   }
   
   // Dispatch a custom event to notify that datasets have been updated

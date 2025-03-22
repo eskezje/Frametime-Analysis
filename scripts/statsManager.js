@@ -64,12 +64,6 @@ function getMetricValue(row, metric) {
  * @returns {Object} e.g. {max, min, avg, stdev, p1, p01, p001, low1, low01, low001}
  */
 function calculateStatistics(arr, metricName = '') {
-  // DEBUG: Log the metric name and some sample values
-  console.log(`calculateStatistics called with metricName="${metricName}"`);
-  if (arr.length > 0) {
-    console.log(`Sample values: min=${Math.min(...arr)}, max=${Math.max(...arr)}, avg=${arr.reduce((a,b)=>a+b,0)/arr.length}`);
-  }
-  
   if (!arr.length) {
     return {
       max: NaN, min: NaN, avg: NaN, stdev: NaN,
@@ -97,12 +91,8 @@ function calculateStatistics(arr, metricName = '') {
   
   // Auto-detect FPS based on data if metric name is empty
   if (!metricName && avg > 30 && minVal > 20) {
-    console.log('Auto-detecting metric as FPS based on value range');
     isFpsMetric = true;
   }
-  
-  // DEBUG: Log if this is detected as an FPS metric
-  console.log(`isFpsMetric=${isFpsMetric} for "${metricName}"`);
 
   // Number of frames in each slice (worst 1%, 0.1%, etc.)
   const c1 = Math.max(1, Math.ceil(sorted.length * 0.01));   // 1%
@@ -125,8 +115,6 @@ function calculateStatistics(arr, metricName = '') {
     if (c001 > 0) {
       low001 = sorted.slice(0, c001).reduce((s, v) => s + v, 0) / c001;
     }
-    // DEBUG: Log the calculated lows for FPS metric
-    console.log(`FPS lows calculated: low1=${low1}, low01=${low01}, low001=${low001}`);
 
   } else {
     //
@@ -143,8 +131,6 @@ function calculateStatistics(arr, metricName = '') {
     if (c001 > 0) {
       low001 = descending.slice(0, c001).reduce((s, v) => s + v, 0) / c001;
     }
-    // DEBUG: Log the calculated lows for non-FPS metric
-    console.log(`Non-FPS lows calculated: low1=${low1}, low01=${low01}, low001=${low001}`);
   }
 
   return {
@@ -303,18 +289,11 @@ function analyzeFramePacing(frametimes) {
  * @param {string} datasetName
  */
 function showVisualStats(stats, metric, datasetName) {
-  // DEBUG: Log the metric name and stats being used
-  console.log(`showVisualStats called with metric="${metric}", datasetName="${datasetName}"`);
-  console.log('Stats object:', JSON.stringify(stats, null, 2));
-  
   const container = document.getElementById('visualStats');
   if (!container) return;
 
   // Determine whether higher or lower values are better for this metric
-  // Update to use more flexible FPS detection
   const isFpsMetric = metric.toLowerCase().includes('fps');
-  // DEBUG: Log if this is detected as an FPS metric
-  console.log(`showVisualStats: isFpsMetric=${isFpsMetric} for "${metric}"`);
   
   const betterLabel = isFpsMetric ? 'higher' : 'lower';
   const worseLabel = isFpsMetric ? 'lower' : 'higher';
@@ -390,16 +369,7 @@ function updateStatsTable() {
   tbody.innerHTML = '';
 
   selectedMetrics.forEach(metric => {
-    // DEBUG: Log the metric being processed
-    console.log(`Processing metric "${metric}" for stats table`);
-    
     const arr = ds.rows.map(r => getMetricValue(r, metric)).filter(v => typeof v === 'number');
-    
-    // DEBUG: Log sample values from the array to verify data type
-    if (arr.length > 0) {
-      console.log(`${metric} data sample: [${arr.slice(0, 5).join(', ')}...]`);
-      console.log(`Value range: min=${Math.min(...arr)}, max=${Math.max(...arr)}`);
-    }
     
     // Pass metric name to ensure correct calculation of low percentiles
     const st = calculateStatistics(arr, metric);
