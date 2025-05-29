@@ -177,6 +177,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize dataset selects on page load
   populateAllDatasetSelects();
+
+  // Initialize chart container empty state
+  const chartContainer = document.getElementById('chartContainer');
+  if (chartContainer && (!window.chartDatasets || window.chartDatasets.length === 0)) {
+    chartContainer.classList.add('empty');
+  }
 });
 
 // Populate all dataset selection dropdowns

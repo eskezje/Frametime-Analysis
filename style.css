@@ -89,6 +89,29 @@ button:hover {
 .chart-container {
     height: 400px;
     margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transition: height 0.3s ease;
+    position: relative;
+}
+.empty-chart-message {
+    text-align: center;
+    color: #888;
+    font-size: 16px;
+    padding: 30px;
+    border: 2px dashed #ddd;
+    border-radius: 8px;
+    width: 80%;
+    background-color: #f9f9f9;
+    display: none;
+}
+.chart-container.empty .empty-chart-message {
+    display: block;
+}
+.chart-container.empty canvas {
+    display: none;
 }
 table {
     width: 100%;
