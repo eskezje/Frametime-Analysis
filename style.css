@@ -1088,24 +1088,131 @@ pre {
   line-height: 1.4;
 }
 
-/* Make canvas responsive */
-#frameStabilityCanvas {
-  max-width: 100%;
-  height: auto;
+/* Enhanced styles for the statistics table with multiple datasets */
+.stats-table-dataset-header {
+    text-align: center;
+    border-bottom: none;
+    background-color: #6796c5;
+    color: white;
 }
 
-.metric-explanation {
-  font-style: italic;
-  color: #666;
-  margin: 5px 0;
+.empty-stats-message {
+    text-align: center;
+    color: #888;
+    font-size: 16px;
+    padding: 30px;
+    border: 2px dashed #ddd;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+    margin: 20px 0;
+    display: none;
 }
 
-.value-quality, .value-note {
-  font-size: 0.85em;
-  color: #666;
-  font-style: italic;
+.empty-stats table {
+    display: none;
 }
 
-.value-quality {
-  font-weight: bold;
+.empty-stats .empty-stats-message {
+    display: block;
+}
+
+.dark-theme .empty-stats-message {
+    color: #aaa;
+    background-color: #2a2a2a;
+    border-color: #444;
+}
+
+/* Updated statistics table styles */
+#statsTable {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+#statsTable th {
+    background-color: #6796c5;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+    padding: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+#statsTable td {
+    padding: 8px 12px;
+    text-align: right;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+#statsTable .dataset-name-cell {
+    text-align: left;
+    font-weight: bold;
+    background-color: #f8f9fa;
+    border-right: 1px solid #e0e0e0;
+}
+
+#statsTable .stats-metric-header th {
+    background-color: #4a7db9;
+    text-align: center;
+    font-size: 16px;
+    padding: 12px;
+}
+
+#statsTable .metric-spacer-row {
+    height: 20px;
+    background-color: #f5f7fa;
+}
+
+.dark-theme #statsTable .metric-spacer-row {
+    background-color: #222;
+}
+
+.dark-theme #statsTable th {
+    background-color: #1e466e;
+}
+
+.dark-theme #statsTable .stats-metric-header th {
+    background-color: #0d325c;
+}
+
+.dark-theme #statsTable td {
+    border-color: #444;
+}
+
+.dark-theme #statsTable .dataset-name-cell {
+    background-color: #333;
+}
+
+.dataset-better-value {
+    font-weight: bold;
+    color: #2ecc71;
+}
+
+.dataset-worse-value {
+    color: #e74c3c;
+}
+
+.dark-theme .dataset-better-value {
+    color: #2ecc71;
+}
+
+.dark-theme .dataset-worse-value {
+    color: #e74c3c;
+}
+
+/* Add alternating row coloring */
+#statsTable tbody tr:nth-child(even):not(.stats-metric-header):not(.metric-spacer-row) {
+    background-color: #f2f2f2;
+}
+
+.dark-theme #statsTable tbody tr:nth-child(even):not(.stats-metric-header):not(.metric-spacer-row) {
+    background-color: #2a2a2a;
+}
+
+/* Make the table scrollable if it gets too wide */
+#statistics {
+    overflow-x: auto;
 }

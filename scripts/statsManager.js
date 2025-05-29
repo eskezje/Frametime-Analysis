@@ -347,94 +347,159 @@ function showVisualStats(stats, metric, datasetName) {
 
 /**
  * Updates the Statistics table (#statsTable) by computing stats for each selected metric,
- * for whichever single dataset is chosen in #statDatasetSelect,
+ * for all selected datasets in the statDatasetSelect dropdown,
  * and revealing/hiding columns based on toggled stats.
  */
 function updateStatsTable() {
-  const dsIndex = document.getElementById('statDatasetSelect').value;
-  if (dsIndex === '') return;
+  const statsContent = document.getElementById('statistics');
+  const statDatasetSelect = document.getElementById('statDatasetSelect');
+  const selectedDatasetIndices = Array.from(statDatasetSelect.selectedOptions).map(opt => parseInt(opt.value));
+  
+  // Add or remove the empty class based on whether datasets are selected
+  if (!selectedDatasetIndices.length) {
+    statsContent.classList.add('empty-stats');
+    return;
+  } else {
+    statsContent.classList.remove('empty-stats');
+  }
 
-  const ds = window.allDatasets[dsIndex];
-  if (!ds) return;
+  // Get the selected datasets
+  const selectedDatasets = selectedDatasetIndices.map(idx => window.allDatasets[idx]).filter(Boolean);
+  if (!selectedDatasets.length) return;
 
   // Which metrics are toggled "active"?
   const selectedMetrics = Array.from(document.querySelectorAll('#statMetricsGroup .toggle-button.active'))
     .map(btn => btn.dataset.metric);
+  
+  if (!selectedMetrics.length) return;
 
   // Which stats are toggled "active"?
   const selectedStats = Array.from(document.querySelectorAll('#statsTypeGroup .toggle-button.active'))
     .map(btn => btn.dataset.stat);
+  
+  if (!selectedStats.length) return;
 
-  const tbody = document.querySelector('#statsTable tbody');
+  // Create the table header with statistic types
+  const statsTable = document.getElementById('statsTable');
+  const thead = statsTable.querySelector('thead');
+  const tbody = statsTable.querySelector('tbody');
+
+  // Clear existing table content
+  thead.innerHTML = '';
   tbody.innerHTML = '';
 
+  // Create the header row with stat names
+  const headerRow = document.createElement('tr');
+  headerRow.innerHTML = '<th>Dataset</th>';
+
+  // Add each stat as a column header
+  selectedStats.forEach(stat => {
+    headerRow.innerHTML += `<th>${getStatDisplayName(stat)}</th>`;
+  });
+
+  thead.appendChild(headerRow);
+
+  // Process each metric separately
   selectedMetrics.forEach(metric => {
-    const arr = ds.rows.map(r => getMetricValue(r, metric)).filter(v => typeof v === 'number');
+    // Add a metric header row
+    const metricHeaderRow = document.createElement('tr');
+    metricHeaderRow.className = 'stats-metric-header';
+    metricHeaderRow.innerHTML = `<th colspan="${selectedStats.length + 1}">${metric}</th>`;
+    tbody.appendChild(metricHeaderRow);
     
-    // Pass metric name to ensure correct calculation of low percentiles
-    const st = calculateStatistics(arr, metric);
+    // Calculate statistics for each dataset for this metric
+    const datasetStats = selectedDatasets.map(dataset => {
+      const values = dataset.rows
+        .map(r => getMetricValue(r, metric))
+        .filter(v => typeof v === 'number');
+      
+      return {
+        name: dataset.name,
+        stats: calculateStatistics(values, metric)
+      };
+    });
 
-    let rowHTML = `<tr><td>${metric}</td>`;
+    // Determine if higher values are better for this metric
+    const isFpsMetric = metric.toLowerCase().includes('fps');
+    
+    // Create a row for each dataset
+    datasetStats.forEach(dsStats => {
+      const datasetRow = document.createElement('tr');
+      
+      // Add dataset name cell
+      const nameCell = document.createElement('td');
+      nameCell.textContent = dsStats.name;
+      nameCell.className = 'dataset-name-cell';
+      datasetRow.appendChild(nameCell);
+      
+      // For each selected stat type, add a cell
+      selectedStats.forEach(stat => {
+        const value = dsStats.stats[stat];
+        const cell = document.createElement('td');
+        
+        if (!isNaN(value)) {
+          // Format the value
+          cell.textContent = value.toFixed(4);
+          
+          // Compare values across datasets if there are multiple
+          if (datasetStats.length > 1) {
+            // Get all values for this stat across datasets
+            const allValues = datasetStats
+              .map(ds => ds.stats[stat])
+              .filter(v => !isNaN(v));
 
-    // For each stat column, fill if user toggled it
-    const colHeads = document.querySelectorAll('#statsTable thead th.stat-col');
-    colHeads.forEach(th => {
-      const statName = th.dataset.stat;
-      if (selectedStats.includes(statName)) {
-        let val = st[statName];
-        if (!isNaN(val)) {
-          val = val.toFixed(4);
+            // Determine if this value is best or worst
+            const isBest = isFpsMetric ? 
+              (stat === 'stdev' ? value === Math.min(...allValues) : value === Math.max(...allValues)) :
+              (stat === 'stdev' ? value === Math.min(...allValues) : value === Math.min(...allValues));
+              
+            const isWorst = isFpsMetric ? 
+              (stat === 'stdev' ? value === Math.max(...allValues) : value === Math.min(...allValues)) :
+              (stat === 'stdev' ? value === Math.max(...allValues) : value === Math.max(...allValues));
+              
+            if (isBest) cell.classList.add('dataset-better-value');
+            else if (isWorst) cell.classList.add('dataset-worse-value');
+          }
         } else {
-          val = 'N/A';
+          cell.textContent = 'N/A';
         }
-        rowHTML += `<td>${val}</td>`;
-      } else {
-        // still create cell, but hidden
-        rowHTML += `<td class="hidden"></td>`;
-      }
+        
+        datasetRow.appendChild(cell);
+      });
+      
+      tbody.appendChild(datasetRow);
     });
-
-    rowHTML += '</tr>';
-    tbody.insertAdjacentHTML('beforeend', rowHTML);
-  });
-
-  // Show/hide columns
-  const cols = document.querySelectorAll('#statsTable thead th.stat-col');
-  const rows = document.querySelectorAll('#statsTable tbody tr');
-  
-  cols.forEach(col => {
-    const statName = col.dataset.stat;
-    const idx = Array.from(col.parentNode.children).indexOf(col);
-    const isVisible = selectedStats.includes(statName);
-
-    // Toggle visibility for both header and all cells in this column
-    col.classList.toggle('hidden', !isVisible);
-    rows.forEach(tr => {
-      if (tr.children[idx]) {
-        tr.children[idx].classList.toggle('hidden', !isVisible);
-      }
-    });
-  });
-
-  // Example: highlight cells on hover
-  document.querySelectorAll('#statsTable tbody td').forEach(cell => {
-    cell.addEventListener('mouseenter', () => cell.classList.add('highlight'));
-    cell.addEventListener('mouseleave', () => cell.classList.remove('highlight'));
+    
+    // Add an empty row after each metric group for better readability
+    if (selectedMetrics.length > 1) {
+      const spacerRow = document.createElement('tr');
+      spacerRow.className = 'metric-spacer-row';
+      spacerRow.innerHTML = `<td colspan="${selectedStats.length + 1}"></td>`;
+      tbody.appendChild(spacerRow);
+    }
   });
 }
 
 /**
- * Optionally provides a separate function to visualize the calculated stats in a chart,
- * e.g. #statsChart, if you want to show a bar chart of e.g. "Avg" for each metric.
+ * Returns a display name for a statistic key
+ * @param {string} stat - Statistic key (e.g., 'avg', 'p1', 'stdev')
+ * @returns {string} - Human readable name
  */
-function visualizeStatistics() {
-  const container = document.getElementById('statsVisualizationContainer');
-  if (!container) return;
-
-  container.classList.remove('hidden');
-  // e.g. you could create a bar chart in #statsChart showing each metric’s values
-  // Implementation depends on your design
-  console.log("Visualize stats not yet implemented. Add your chart code here if desired.");
+function getStatDisplayName(stat) {
+  const displayNames = {
+    'max': 'Maximum',
+    'min': 'Minimum',
+    'avg': 'Average',
+    'stdev': 'Std Deviation',
+    'p1': '1% Percentile',
+    'p01': '0.1% Percentile',
+    'p001': '0.01% Percentile',
+    'low1': '1% Low',
+    'low01': '0.1% Low',
+    'low001': '0.01% Low'
+  };
+  
+  return displayNames[stat] || stat;
 }
 
 // Expose these to the global scope:
@@ -446,3 +511,4 @@ window.analyzeFramePacing = analyzeFramePacing;
 window.showVisualStats = showVisualStats;
 window.updateStatsTable = updateStatsTable;
 window.visualizeStatistics = visualizeStatistics;
+window.getStatDisplayName = getStatDisplayName;
