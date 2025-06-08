@@ -480,6 +480,66 @@ function updateStatsTable() {
   });
 }
 
+// Chart.js instance for statistics visualization
+let statsChart = null;
+
+/**
+ * Visualizes selected statistics in a simple bar chart.
+ * Uses the first enabled statistic across chosen metrics and datasets.
+ */
+function visualizeStatistics() {
+  const container = document.getElementById('statsVisualizationContainer');
+  const canvas = document.getElementById('statsChart');
+  if (!container || !canvas) return;
+
+  const statDatasetSelect = document.getElementById('statDatasetSelect');
+  const datasetIndices = Array.from(statDatasetSelect.selectedOptions).map(opt => parseInt(opt.value));
+  if (!datasetIndices.length) {
+    window.notify?.('Select datasets to visualize statistics', 'warning');
+    return;
+  }
+
+  const metrics = Array.from(document.querySelectorAll('#statMetricsGroup .toggle-button.active')).map(btn => btn.dataset.metric);
+  const stats = Array.from(document.querySelectorAll('#statsTypeGroup .toggle-button.active')).map(btn => btn.dataset.stat);
+
+  if (!metrics.length || !stats.length) {
+    window.notify?.('Select metrics and stats', 'warning');
+    return;
+  }
+
+  const statKey = stats[0];
+  const chartLabels = metrics.slice();
+  const chartDatasets = datasetIndices.map((idx, i) => {
+    const ds = window.allDatasets[idx];
+    const data = metrics.map(metric => {
+      const values = ds.rows.map(r => getMetricValue(r, metric)).filter(v => typeof v === 'number');
+      const statObj = calculateStatistics(values, metric);
+      return statObj[statKey];
+    });
+    const color = typeof randomColor === 'function' ? randomColor() : `hsl(${(i * 70) % 360},70%,50%)`;
+    return { label: `${ds.name} (${statKey})`, data, backgroundColor: color };
+  });
+
+  container.classList.remove('hidden');
+
+  if (statsChart) statsChart.destroy();
+
+  statsChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: chartLabels,
+      datasets: chartDatasets
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { title: { display: true, text: 'Metric' } },
+        y: { title: { display: true, text: getStatDisplayName(statKey) } }
+      }
+    }
+  });
+}
+
 /**
  * Returns a display name for a statistic key
  * @param {string} stat - Statistic key (e.g., 'avg', 'p1', 'stdev')

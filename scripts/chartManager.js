@@ -3,6 +3,7 @@
 // We'll store the Chart.js instance & chart-specific data arrays
 window.mainChart = null;
 window.chartDatasets = [];
+window.violinLabels = [];
 
 /**
  * Builds a histogram from an array of numeric data.
@@ -10,11 +11,20 @@ window.chartDatasets = [];
  * @returns {{labels: string[], counts: number[]}}
  */
 function buildHistogram(data) {
+  if (!data.length) {
+    return { labels: [], counts: [] };
+  }
+
   const minVal = Math.min(...data);
   const maxVal = Math.max(...data);
 
+  // Handle case where all values are identical
+  if (minVal === maxVal) {
+    return { labels: [minVal.toString()], counts: [data.length] };
+  }
+
   // A simple approach: #bins = sqrt(n) but capped at 50
-  const binCount = Math.min(50, Math.ceil(Math.sqrt(data.length)));
+  const binCount = Math.max(1, Math.min(50, Math.ceil(Math.sqrt(data.length))));
   const binWidth = (maxVal - minVal) / binCount;
 
   const counts = Array(binCount).fill(0);
@@ -112,6 +122,16 @@ function renderChart(chartType) {
       type: 'linear',
       title: { display: true, text: 'Sample Quantiles' }
     };
+  } else if (chartType === 'violin') {
+    chartConfigType = 'violin';
+    scales.x = {
+      type: 'category',
+      title: { display: true, text: 'Dataset' }
+    };
+    scales.y = {
+      type: 'linear',
+      title: { display: true, text: 'Value' }
+    };
   } else {
     // line / scatter default
     scales.x = {
@@ -127,6 +147,7 @@ function renderChart(chartType) {
   const config = {
     type: chartConfigType,
     data: {
+      labels: chartType === 'violin' ? window.violinLabels : undefined,
       datasets: window.chartDatasets
     },
     options: {
@@ -173,6 +194,7 @@ function renderChart(chartType) {
  */
 function clearChart() {
   window.chartDatasets.length = 0;
+  window.violinLabels.length = 0;
   if (window.mainChart) {
     window.mainChart.destroy();
     window.mainChart = null;
@@ -207,6 +229,10 @@ function addToChart() {
   const metric = document.getElementById('metricSelect').value;
   const chartType = document.getElementById('chartTypeSelect').value;
   const chosenColor = document.getElementById('colorSelect').value;
+
+  if (chartType !== 'violin') {
+    window.violinLabels.length = 0;
+  }
 
   // For each selected dataset index:
   indices.forEach(idx => {
@@ -287,6 +313,18 @@ function addToChart() {
         pointRadius: 0,
         borderWidth: 2,
         showLine: true
+      });
+    } else if (chartType === 'violin') {
+      if (!Array.isArray(window.violinLabels)) {
+        window.violinLabels = [];
+      }
+      window.violinLabels.push(ds.name);
+      window.chartDatasets.push({
+        label: ds.name,
+        data: numericValues,
+        type: 'violin',
+        backgroundColor: chosenColor,
+        borderColor: chosenColor
       });
     }
   });
