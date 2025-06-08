@@ -73,12 +73,18 @@ function parseCSVLine(line, delimiter) {
   const result = [];
   let inQuotes = false;
   let currentValue = '';
-  
+
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
-    
+
     if (char === '"') {
-      inQuotes = !inQuotes;
+      if (inQuotes && line[i + 1] === '"') {
+        // Escaped quote inside a quoted field
+        currentValue += '"';
+        i++; // Skip the next quote
+      } else {
+        inQuotes = !inQuotes;
+      }
     } else if (char === delimiter && !inQuotes) {
       result.push(currentValue.trim());
       currentValue = '';
@@ -86,14 +92,15 @@ function parseCSVLine(line, delimiter) {
       currentValue += char;
     }
   }
-  
+
   // Add the last field
   result.push(currentValue.trim());
-  
-  // Remove quotes from quoted fields
+
+  // Remove outer quotes and unescape inner quotes
   return result.map(val => {
+    val = val.trim();
     if (val.startsWith('"') && val.endsWith('"')) {
-      return val.substring(1, val.length - 1);
+      val = val.substring(1, val.length - 1).replace(/""/g, '"');
     }
     return val;
   });
