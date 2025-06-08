@@ -78,7 +78,10 @@ function calculateStatistics(arr, metricName = '') {
   const minVal = sorted[0];
   const sum = sorted.reduce((a, b) => a + b, 0);
   const avg = sum / sorted.length;
-  const stdev = jStat.stdev(sorted);
+  // Use jStat if available, otherwise fall back to a simple implementation
+  const stdev = (typeof jStat !== 'undefined' && typeof jStat.stdev === 'function')
+    ? jStat.stdev(sorted)
+    : Math.sqrt(sorted.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / sorted.length);
 
   // Percentiles (p1 = 1%, p01 = 0.1%, p001 = 0.01%)
   const p1 = calculatePercentile(sorted, 1);
@@ -247,8 +250,12 @@ function analyzeFramePacing(frametimes) {
   const madDiff = calculatePercentile(sortedDiffDevs, 50);
 
   // Also calculate standard stats for backward compatibility
-  const avgDiff = jStat.mean(diffs);
-  const stdevDiff = jStat.stdev(diffs);
+  const avgDiff = (typeof jStat !== 'undefined' && typeof jStat.mean === 'function')
+    ? jStat.mean(diffs)
+    : diffs.reduce((a, b) => a + b, 0) / diffs.length;
+  const stdevDiff = (typeof jStat !== 'undefined' && typeof jStat.stdev === 'function')
+    ? jStat.stdev(diffs)
+    : Math.sqrt(diffs.reduce((s, v) => s + Math.pow(v - avgDiff, 2), 0) / diffs.length);
 
   // 6. Define consistency as a function of medianRelDev
   // Tuned with alpha parameter for sensitivity
