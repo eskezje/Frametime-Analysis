@@ -10,11 +10,20 @@ window.chartDatasets = [];
  * @returns {{labels: string[], counts: number[]}}
  */
 function buildHistogram(data) {
+  if (!data.length) {
+    return { labels: [], counts: [] };
+  }
+
   const minVal = Math.min(...data);
   const maxVal = Math.max(...data);
 
+  // Handle case where all values are identical
+  if (minVal === maxVal) {
+    return { labels: [minVal.toString()], counts: [data.length] };
+  }
+
   // A simple approach: #bins = sqrt(n) but capped at 50
-  const binCount = Math.min(50, Math.ceil(Math.sqrt(data.length)));
+  const binCount = Math.max(1, Math.min(50, Math.ceil(Math.sqrt(data.length))));
   const binWidth = (maxVal - minVal) / binCount;
 
   const counts = Array(binCount).fill(0);
