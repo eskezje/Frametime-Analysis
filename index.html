@@ -194,11 +194,10 @@
 
         <div class="chart-container" id="chartContainer">
           <canvas id="mainChart"></canvas>
-        </div>
-
-        <div class="card">
-          <h3>Statistics for Last Added Metric</h3>
-          <div id="visualStats"></div>
+          <div class="empty-chart-message">
+            <p>No data added to chart</p>
+            <p>Select dataset(s), choose a metric, and click "Add to Chart"</p>
+          </div>
         </div>
       </div>
 
@@ -206,8 +205,8 @@
       <div id="statistics" class="tab-content hidden">
         <div class="controls">
           <div class="control-group">
-            <label for="statDatasetSelect">Select Dataset:</label>
-            <select id="statDatasetSelect"></select>
+            <label for="statDatasetSelect">Select Datasets:</label>
+            <select id="statDatasetSelect" multiple></select>
           </div>
 
           <div class="control-group">
@@ -245,7 +244,6 @@
           </div>
 
           <button id="calculateStatsBtn">Calculate Statistics</button>
-          <!-- <button id="visualizeStatsBtn" class="secondary-button">Visualize Statistics</button> -->
         </div>
 
         <div class="stats-visualization-container hidden" id="statsVisualizationContainer">
@@ -255,20 +253,19 @@
           </div>
         </div>
 
+        <div class="empty-stats-message">
+          <p>Select datasets, choose metrics, and click "Calculate Statistics"</p>
+        </div>
+
         <table id="statsTable" class="enhanced-table">
           <thead>
-            <tr>
+            <tr id="statsTableHeader">
               <th>Metric</th>
-              <th class="stat-col" data-stat="max">Max</th>
-              <th class="stat-col" data-stat="avg">Avg</th>
-              <th class="stat-col" data-stat="min">Min</th>
-              <th class="stat-col" data-stat="p1">1%ile</th>
-              <th class="stat-col" data-stat="p01">0.1%ile</th>
-              <th class="stat-col" data-stat="p001">0.01%ile</th>
-              <th class="stat-col" data-stat="low1">1% Low</th>
-              <th class="stat-col" data-stat="low01">0.1% Low</th>
-              <th class="stat-col" data-stat="low001">0.01% Low</th>
-              <th class="stat-col" data-stat="stdev">STDEV</th>
+              <!-- Dataset headers will be inserted here -->
+            </tr>
+            <tr id="statsTableSubHeader">
+              <th>Statistic</th>
+              <!-- Stat column headers will be inserted here -->
             </tr>
           </thead>
           <tbody></tbody>

@@ -177,6 +177,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize dataset selects on page load
   populateAllDatasetSelects();
+
+  // Initialize chart container empty state
+  const chartContainer = document.getElementById('chartContainer');
+  if (chartContainer && (!window.chartDatasets || window.chartDatasets.length === 0)) {
+    chartContainer.classList.add('empty');
+  }
+
+  // Initialize statistics tab with empty state
+  const statsContent = document.getElementById('statistics');
+  if (statsContent) {
+    statsContent.classList.add('empty-stats');
+  }
 });
 
 // Populate all dataset selection dropdowns

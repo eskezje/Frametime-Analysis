@@ -67,19 +67,27 @@ function buildQQPlot(data) {
  */
 function renderChart(chartType) {
   const canvas = document.getElementById('mainChart');
-  if (!canvas) {
-    console.warn("mainChart canvas not found in HTML.");
+  const chartContainer = document.getElementById('chartContainer');
+  
+  if (!canvas || !chartContainer) {
+    console.warn("Chart elements not found in HTML.");
     return;
   }
 
   const ctx = canvas.getContext('2d');
+  
   if (window.mainChart) {
     window.mainChart.destroy();
   }
+  
   if (!window.chartDatasets.length) {
     console.log("No datasets to render in chartDatasets.");
+    chartContainer.classList.add('empty');
     return;
   }
+
+  // Not empty anymore, remove the empty class
+  chartContainer.classList.remove('empty');
 
   // Default chart is 'line', but if the user picks scatter/histogram/qqplot, adapt:
   let chartConfigType = chartType === 'scatter' ? 'scatter' : 'line';
@@ -169,6 +177,13 @@ function clearChart() {
     window.mainChart.destroy();
     window.mainChart = null;
   }
+  
+  // Show the empty state
+  const chartContainer = document.getElementById('chartContainer');
+  if (chartContainer) {
+    chartContainer.classList.add('empty');
+  }
+  
   document.getElementById('datasetOrderList').innerHTML = '';
   console.log("Chart cleared");
 }
@@ -285,18 +300,6 @@ function addToChart() {
   // Enable the "Clear Chart" button if needed
   const clearChartBtn = document.getElementById('clearChartBtn');
   if (clearChartBtn) clearChartBtn.disabled = false;
-
-  // Add this at the end:
-  if (indices.length > 0 && window.showVisualStats) {
-    const lastIdx = indices[indices.length - 1];
-    const lastDataset = window.allDatasets[lastIdx];
-    const metric = document.getElementById('metricSelect').value;
-    const data = lastDataset.rows
-      .map(r => getMetricValue(r, metric))
-      .filter(v => v !== null && v !== undefined);
-    const stats = calculateStatistics(data, metric || 'FrameTime');
-    showVisualStats(stats, metric, lastDataset.name);
-  }
 }
 
 /**
