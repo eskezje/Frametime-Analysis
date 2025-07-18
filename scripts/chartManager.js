@@ -71,12 +71,12 @@ function buildQQPlot(data) {
 }
 
 /**
- * Renders (or re-renders) the Chart.js chart based on the current chartDatasets array.
- * @param {string} chartType - e.g. 'line' | 'scatter' | 'bar' | 'histogram' | 'qqplot' | 'violin'
+ * Renders (or re‑renders) the Chart.js chart based on the current chartDatasets array.
+ * @param {string} chartType - 'line' | 'scatter' | 'bar' | 'histogram' | 'qqplot' | 'violin'
  */
 function renderChart(chartType) {
-  const canvas        = document.getElementById('mainChart');
-  const chartContainer= document.getElementById('chartContainer');
+  const canvas = document.getElementById('mainChart');
+  const chartContainer = document.getElementById('chartContainer');
   if (!canvas || !chartContainer) {
     console.warn("Chart elements not found in HTML.");
     return;
@@ -86,44 +86,42 @@ function renderChart(chartType) {
   if (window.mainChart) {
     window.mainChart.destroy();
   }
-  if (!window.chartDatasets.length) {
+  if (!Array.isArray(window.chartDatasets) || window.chartDatasets.length === 0) {
     chartContainer.classList.add('empty');
     console.log("No datasets to render.");
     return;
   }
   chartContainer.classList.remove('empty');
 
-  // Determine controller type & scales
-  let chartConfigType = ['scatter','qqplot'].includes(chartType) ? 'scatter' : 'line';
+  // determine controller type & axes
+  let ctrlType = 'line';
   const scales = {};
-
   if (chartType === 'histogram') {
-    chartConfigType = 'bar';
+    ctrlType = 'bar';
     scales.x = { type: 'category', title: { display: true, text: 'Bin Range' } };
     scales.y = { title: { display: true, text: 'Count' } };
-  }
-  else if (chartType === 'qqplot') {
-    chartConfigType = 'scatter';
+  } else if (chartType === 'qqplot') {
+    ctrlType = 'scatter';
     scales.x = { type: 'linear', title: { display: true, text: 'Theoretical Quantiles' } };
     scales.y = { type: 'linear', title: { display: true, text: 'Sample Quantiles' } };
-  }
-  else if (chartType === 'violin') {
-    chartConfigType = 'violin';
-    scales.x = { type: 'category', title: { display: true, text: 'Dataset' } };
-    scales.y = { type: 'linear',   title: { display: true, text: 'Value'   } };
-  }
-  else {
-    // line / scatter default
+  } else if (chartType === 'scatter') {
+    ctrlType = 'scatter';
     scales.x = { type: 'linear', title: { display: true, text: 'Sample # / Frame #' } };
-    scales.y = { type: 'linear', title: { display: true, text: 'Value'            } };
+    scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
+  } else if (chartType === 'violin') {
+    ctrlType = 'violin';
+    scales.x = { type: 'category', title: { display: true, text: 'Dataset' } };
+    scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
+  } else {
+    scales.x = { type: 'linear', title: { display: true, text: 'Sample # / Frame #' } };
+    scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
   }
 
-  const config = {
-    type: chartConfigType,
+  // build config
+  const cfg = {
+    type: ctrlType,
     data: {
-      // only set labels for violin
-      ...(chartType === 'violin' && { labels: window.chartLabels }),
-      datasets: window.chartDatasets
+      datasets: window.chartDatasets.slice()
     },
     options: {
       responsive: true,
@@ -133,10 +131,17 @@ function renderChart(chartType) {
         tooltip: {
           callbacks: {
             label(ctx) {
-              // for violin, ctx.raw is the array of values; we show dataset label only
-              return chartType === 'violin'
-                ? ctx.dataset.label
-                : `${ctx.dataset.label}: ${ctx.formattedValue}`;
+              if (ctx.dataset.type === 'violin') {
+                const vals = ctx.dataset.data[ctx.dataIndex];
+                const [q1, m, q3] = jStat.quantiles(vals, [0.25, 0.5, 0.75]);
+                return [
+                  `N = ${vals.length}`,
+                  `Q1 = ${q1.toFixed(2)}`,
+                  `Median = ${m.toFixed(2)}`,
+                  `Q3 = ${q3.toFixed(2)}`
+                ];
+              }
+              return `${ctx.dataset.label}: ${ctx.formattedValue}`;
             }
           }
         },
@@ -147,7 +152,7 @@ function renderChart(chartType) {
             wheel: { enabled: true },
             pinch: { enabled: true },
             drag: {
-              enabled:      true,
+              enabled: true,
               backgroundColor: 'rgba(52,152,219,0.2)',
               borderColor:     'rgba(52,152,219,0.5)',
               borderWidth:     1
@@ -155,25 +160,21 @@ function renderChart(chartType) {
             mode: 'xy'
           }
         }
-      },
-      // violin‑specific styling
-      ...(chartType === 'violin' && {
-        elements: {
-          violin: {
-            bandwidth:      5,
-            backgroundColor: window.chartDatasets[0].backgroundColor,
-            borderColor:     window.chartDatasets[0].borderColor,
-            borderWidth:     1,
-            quantile: { median: { color: '#000', lineWidth: 2 } }
-          }
-        }
-      })
+      }
     }
   };
 
-  window.mainChart = new Chart(ctx, config);
+  // if violin, we already have 2 datasets: violin & boxplot
+  // axis labels come from chartLabels
+  if (chartType === 'violin') {
+    cfg.data.labels = window.chartLabels.slice();
+    // we let each dataset carry its own .type and .order
+  }
+
+  window.mainChart = new Chart(ctx, cfg);
   console.log(`Chart rendered (${chartType}) with ${window.chartDatasets.length} dataset(s).`);
 }
+
 
 /**
  * Clears the current chart (removes all datasets from chartDatasets).
@@ -195,106 +196,146 @@ function clearChart() {
   console.log("Chart cleared");
 }
 
+// helper to convert "#RRGGBB" → "rgba(r,g,b,a)"
+function hexToRgba(hex, alpha) {
+  const bigint = parseInt(hex.replace('#',''), 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8)  & 255;
+  const b = bigint & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 /**
  * Builds chartDatasets (and for violin, chartLabels) then calls renderChart().
  */
 function addToChart() {
-  const datasetSelect = document.getElementById('datasetSelect');
-  const indices = Array.from(datasetSelect.selectedOptions)
-                       .map(o => parseInt(o.value, 10));
-  if (!indices.length) {
+  const select = document.getElementById('datasetSelect');
+  const indices = Array.from(select.selectedOptions).map(o => +o.value);
+  if (indices.length === 0) {
     console.error("No datasets selected.");
     return;
   }
 
   const metric    = document.getElementById('metricSelect').value;
   const chartType = document.getElementById('chartTypeSelect').value;
-  const color     = document.getElementById('colorSelect').value;
+  const hexColor  = document.getElementById('colorSelect').value;
 
-  // Violin case: one dataset of arrays + separate labels
-  if (chartType === 'violin') {
-    // extract one array per selected dataset
-    const labels = indices.map(i => window.allDatasets[i].name);
-    const groups = indices.map(i =>
-      window.allDatasets[i].rows
-        .map(r => getMetricValue(r, metric))
-        .filter(v => v != null)
-    );
+  // clear out any previous
+  window.chartDatasets = [];
 
-    window.chartLabels   = labels;
-    window.chartDatasets = [{
-      label: `${metric} Distribution`,
-      data: groups,
-      backgroundColor: labels.map(_ => color),
-      borderColor:     labels.map(_ => color),
-      borderWidth: 1,
-      type: 'violin'
-    }];
+  // ---- VIOLIN + BOXPLOT COMBO ----
+if (chartType === 'violin') {
+  const labels = indices.map(i => allDatasets[i].name);
+  const groups = indices.map(i =>
+    allDatasets[i].rows
+      .map(r => getMetricValue(r, metric))
+      .filter(v => v != null)
+  );
 
-    renderChart('violin');
-    updateDatasetOrder();    // if you maintain an order list in the UI
-    document.getElementById('clearChartBtn').disabled = false;
-    return;
-  }
+  window.chartLabels = labels.slice();
 
-  // Non‑violin: append one dataset per selection
+  // violin fill derived from user color:
+  const violinFill = hexToRgba(hexColor, 0.3);
+  const borderClr  = hexToRgba(hexColor, 1.0);
+
+  // gray for boxplot
+  const grayBorder = 'rgba(80,80,80,1)';
+  const grayFill   = 'rgba(80,80,80,0.4)';
+
+  const violinDs = {
+    label:           `${metric} Density`,
+    type:            'violin',
+    data:            groups,
+    backgroundColor: labels.map(() => violinFill),
+    borderColor:     labels.map(() => borderClr),
+    borderWidth:     1,
+    order:           2
+  };
+
+  const boxDs = {
+    label:           `${metric} Quartiles`,
+    type:            'boxplot',
+    data:            groups,
+    backgroundColor: labels.map(() => grayFill),
+    borderColor:     labels.map(() => grayBorder),
+    borderWidth:     2,
+    order:           1,
+    barPercentage:   0.05,
+    categoryPercentage: 1.0
+  };
+
+  window.chartDatasets = [violinDs, boxDs];
+  renderChart('violin');
+  updateDatasetOrder();
+  clearChartBtn.disabled = false;
+  return;
+}
+
+
+  // ---- ALL OTHER CHART TYPES ----
   indices.forEach(idx => {
     const ds = window.allDatasets[idx];
-    const values = ds.rows
+    const vals = ds.rows
       .map(r => getMetricValue(r, metric))
       .filter(v => v != null);
-    if (!values.length) return;
+    if (!vals.length) return;
 
     let cfg;
+    // line & scatter
     if (chartType === 'line' || chartType === 'scatter') {
       cfg = {
-        label: `${ds.name} - ${metric}`,
-        data: values.map((v,i) => ({ x: i+1, y: v })),
-        borderColor:       color,
-        backgroundColor:   color,
-        pointRadius:       chartType==='scatter'?3:1,
-        showLine:          chartType==='line',
-        fill:              chartType==='line'
+        label:           `${ds.name} - ${metric}`,
+        data:            vals.map((v,i) => ({ x: i+1, y: v })),
+        borderColor:     hexColor,
+        backgroundColor: hexColor,
+        pointRadius:     chartType === 'scatter' ? 3 : 1,
+        showLine:        chartType === 'line',
+        fill:            chartType === 'line'
       };
     }
+    // histogram
     else if (chartType === 'histogram') {
-      const bins = buildHistogram(values);
+      const bins = buildHistogram(vals);
       cfg = {
-        label: `${ds.name} - ${metric}`,
-        data: bins.counts.map((c,i) => ({ x: bins.labels[i], y: c })),
-        type: 'bar',
-        backgroundColor: color
+        label:           `${ds.name} - ${metric}`,
+        data:            bins.counts.map((c,i) => ({ x: bins.labels[i], y: c })),
+        type:            'bar',
+        backgroundColor: hexColor
       };
     }
+    // QQ‑plot
     else if (chartType === 'qqplot') {
-      const qq = buildQQPlot(values);
-      const mean = jStat.mean(values), std = jStat.stdev(values);
-      const zs = qq.map(p=>p.x);
+      const qq    = buildQQPlot(vals);
+      const mean  = jStat.mean(vals), std = jStat.stdev(vals);
+      const zs    = qq.map(p => p.x);
       const linePts = [
         { x: Math.min(...zs), y: mean + std * Math.min(...zs) },
         { x: Math.max(...zs), y: mean + std * Math.max(...zs) }
       ];
-      // Data points
+      // data points
       window.chartDatasets.push({
-        label: `${ds.name} - ${metric} (Data)`,
-        data: qq,
-        borderColor:     color,
-        backgroundColor: color,
+        label:           `${ds.name} - ${metric} (Data)`,
+        data:            qq,
+        borderColor:     hexColor,
+        backgroundColor: hexColor,
         pointRadius:     3,
         showLine:        false
       });
-      // Reference line
+      // ref line
       cfg = {
-        label: `${ds.name} - ${metric} (Ref)`,
-        data: linePts,
-        borderColor:   '#f00',
-        backgroundColor:'#f00',
-        pointRadius:   0,
-        borderWidth:   2,
-        showLine:      true
+        label:           `${ds.name} - ${metric} (Ref Line)`,
+        data:            linePts,
+        borderColor:     '#f00',
+        backgroundColor: '#f00',
+        pointRadius:     0,
+        borderWidth:     2,
+        showLine:        true
       };
     }
-    window.chartDatasets.push(cfg);
+
+    if (cfg) {
+      window.chartDatasets.push(cfg);
+    }
   });
 
   renderChart(chartType);
