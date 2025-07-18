@@ -1216,3 +1216,16 @@ pre {
 #statistics {
     overflow-x: auto;
 }
+
+/* lay the controls in a single row, allow wrapping if window is narrow */
+#visualization .controls{
+  display:flex;
+  flex-wrap:wrap;
+  gap:1rem;
+}
+
+/* datasetGroup stacks its children vertically (label, select, button) */
+#datasetGroup{
+  display:flex;
+  flex-direction:column;
+}

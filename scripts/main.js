@@ -1,28 +1,34 @@
 // main.js
-
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Handle theme preference (dark mode)
-  const savedTheme = localStorage.getItem('theme');
-  const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  if (savedTheme === 'dark' || (!savedTheme && prefersDarkMode)) {
+  const savedTheme     = localStorage.getItem('theme');
+  const prefersDark    = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const themeIcon      = document.getElementById('themeIcon');
+
+  if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
     document.body.classList.add('dark-theme');
-    const themeIcon = document.getElementById('themeIcon');
     if (themeIcon) themeIcon.textContent = '☀️';
   }
 
-  // Add theme toggle functionality
+  updateMetricDropdowns();
+
+  // Set up advanced metrics toggle
+  const advBtn = document.getElementById('toggleAdvancedBtn');
+  if (advBtn) {
+    advBtn.addEventListener('click', () => {
+      window.showAdvancedMetrics = !window.showAdvancedMetrics;
+      advBtn.textContent = window.showAdvancedMetrics ? 'Advanced Metrics ON' : 'Advanced Metrics OFF';
+      updateMetricDropdowns();
+    });
+  }
+
+  // 1. Theme toggle
   const themeToggle = document.querySelector('.theme-toggle');
   if (themeToggle) {
     themeToggle.addEventListener('click', () => {
       document.body.classList.toggle('dark-theme');
       const isDark = document.body.classList.contains('dark-theme');
       localStorage.setItem('theme', isDark ? 'dark' : 'light');
-      
-      // Update icon if it exists
-      const themeIcon = document.getElementById('themeIcon');
-      if (themeIcon) {
-        themeIcon.textContent = isDark ? '☀️' : '🌙';
-      }
+      if (themeIcon) themeIcon.textContent = isDark ? '☀️' : '🌙';
     });
   }
 

@@ -12,56 +12,97 @@ function clearAllDatasets() {
   console.log("All datasets cleared.");
 }
 
+const FRAME_ALIASES = [
+  { key:'frametime',             scale:1     },
+  { key:'frametime(ms)',         scale:1     },
+  { key:'frametime(us)',         scale:0.001 },
+  { key:'msbetweenpresents',     scale:1     },
+  { key:'frame delta time(ms)',  scale:1     }
+];
+
+function canonKey(str){          // lower‑case & strip spaces
+  return str.toLowerCase().replace(/\s+/g,'');
+}
+
+const METRIC_BLACKLIST = new Set([
+  'Application','GPU','CPU','Resolution','Runtime','ProcessID','SwapChainAddress',
+  'PresentFlags','FlipToken', 'AllowsTearing', 'SyncInterval', 'Dropped', 'TimeInSeconds',
+  'CPUStartTime', 
+]);
+
+// global UI flag (default = basic mode)
+window.showAdvancedMetrics = false;
+
+
+/**
+ * Ensures row.FrameTime and row.FPS exist, creating them from aliases when
+ * necessary.
+ */
+function normaliseRow(row){
+  const map = {};
+  Object.keys(row).forEach(k => map[ canonKey(k) ] = k);
+
+  /* FrameTime ----------------------------------------------------------- */
+  if (row.FrameTime == null){
+    for (const {key,scale} of FRAME_ALIASES){
+      const m = map[key];
+      if (m){
+        const v = Number(row[m]);
+        if (Number.isFinite(v)){
+          row.FrameTime = v * scale;
+          break;
+        }
+      }
+    }
+  }
+
+  /* FPS ----------------------------------------------------------------- */
+  if (row.FPS == null){
+    const fpsKey = map['fps'];
+    if (fpsKey && Number.isFinite(row[fpsKey])){
+      row.FPS = Number(row[fpsKey]);
+    } else if (Number.isFinite(row.FrameTime) && row.FrameTime > 0){
+      row.FPS = 1000 / row.FrameTime;           // derive from FT
+    }
+  }
+
+  /* Back‑fill FrameTime from FPS if still missing ---------------------- */
+  if (row.FrameTime == null && Number.isFinite(row.FPS) && row.FPS > 0){
+    row.FrameTime = 1000 / row.FPS;
+  }
+}
+
+
+
+
 /**
  * Reads CSV text into an array of objects, handling quoted strings, multiple delimiters, and line endings.
  * @param {string} text - The CSV file contents as a string.
  * @returns {Array<Object>} The parsed rows as an array of objects.
  */
 function parseCSV(text) {
-  // Normalize line endings (handle CRLF, CR, LF)
-  text = text.replace(/\r\n|\r|\n/g, '\n');
-  const lines = text.trim().split('\n');
+  text = text.replace(/\r\n|\r|\n/g, '\n').trim();
+  const lines = text.split('\n');
   if (!lines.length) return [];
 
-  // Auto-detect delimiter (comma, tab, semicolon)
-  const firstLine = lines[0];
-  let delimiter = ',';
-  const delimiters = [',', '\t', ';'];
-  const counts = delimiters.map(d => (firstLine.match(new RegExp(d, 'g')) || []).length);
-  const maxIndex = counts.indexOf(Math.max(...counts));
-  if (maxIndex >= 0) delimiter = delimiters[maxIndex];
+  const delimiter = [',','\t',';'].sort(
+    (a,b)=> lines[0].split(b).length - lines[0].split(a).length
+  )[0];
 
-  // Parse header row
-  const headers = parseCSVLine(firstLine, delimiter);
-  const result = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    
-    const values = parseCSVLine(line, delimiter);
-    if (values.length !== headers.length) {
-      console.warn(`Line ${i+1} has ${values.length} fields, expected ${headers.length}. Skipping.`);
-      continue;
-    }
-
-    const row = {};
-    for (let j = 0; j < headers.length; j++) {
-      let val = values[j];
-      if (val === 'NA' || val === '') val = null;
-
-      const asNum = parseFloat(val);
-      if (!isNaN(asNum) && val !== null) {
-        row[headers[j]] = asNum; // store as number
-      } else {
-        row[headers[j]] = val;   // store as string/null
-      }
-    }
-    result.push(row);
-  }
-
-  return result;
+  const headers = parseCSVLine(lines[0], delimiter);
+  return lines.slice(1).map(line => {
+    const vals = parseCSVLine(line, delimiter);
+    const obj  = {};
+    headers.forEach((h,i)=>{
+      const raw = vals[i]?.trim() ?? '';
+      const num = Number(raw);
+      obj[h] = Number.isFinite(num) ? num : raw || null;
+    });
+    normaliseRow(obj);
+    return obj;
+  });
 }
+
 
 /**
  * Parse a single CSV line, handling quoted fields with commas
@@ -204,45 +245,27 @@ function refreshDatasetLists() {
   document.dispatchEvent(new CustomEvent('datasetsUpdated'));
 }
 
-/**
- * Detects which metrics are available in the loaded datasets.
- * @returns {Array<string>} Array of available metric names
- */
 function detectAvailableMetrics() {
-  const knownMetrics = [
-    // Standard metrics
-    'FrameTime', 'FPS', 'CPUBusy', 'CPUWait', 'GPUTime', 'GPUBusy', 'GPUWait',
-    
-    // PresentMon metrics
-    'MsBetweenPresents', 'MsBetweenDisplayChange', 'MsInPresentAPI',
-    'MsRenderPresentLatency', 'MsUntilDisplayed', 'MsPCLatency',
-    
-    // Other potential metrics
-    'GPU0Util(%)', 'CPUUtil(%)'
-  ];
-  
-  const availableMetrics = new Set(['FPS']); // FPS is always available as it's derived
-  
-  if (!window.allDatasets || window.allDatasets.length === 0) {
-    return ['FrameTime', 'FPS']; // Default if no datasets
-  }
-  
-  // Check each dataset
-  window.allDatasets.forEach(dataset => {
-    if (!dataset.rows || dataset.rows.length === 0) return;
-    
-    // Use the first row as a sample to check which columns exist
-    const firstRow = dataset.rows[0];
-    
-    // Add each known metric if it exists in this dataset
-    knownMetrics.forEach(metric => {
-      if (typeof firstRow[metric] === 'number') {
-        availableMetrics.add(metric);
+  const metrics = new Set(['FPS', 'FrameTime']);      // always keep these
+
+  window.allDatasets.forEach(ds => {
+    if (!ds.rows?.length) return;
+    const sample = ds.rows[0];
+    Object.keys(sample).forEach(k => {
+      if (
+        typeof sample[k] === 'number' &&
+        !METRIC_BLACKLIST.has(k)
+      ) {
+        metrics.add(k);
       }
     });
   });
-  
-  return Array.from(availableMetrics);
+
+  // basic ⇄ advanced toggle
+  if (!window.showAdvancedMetrics) {
+    return ['FPS', 'FrameTime'];
+  }
+  return Array.from(metrics);
 }
 
 /**

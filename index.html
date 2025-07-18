@@ -77,9 +77,9 @@
           <input
             type="file"
             id="fileInput"
-            accept=".csv,.txt"
+            accept=".csv,.txt,.json"
             multiple
-            aria-label="Upload CSV or TXT files"
+            aria-label="Upload CSV, TXT or JSON files"
           />
           <div class="file-status">
             Drag files here or click to upload
@@ -128,26 +128,22 @@
       <!-- Visualization Tab -->
       <div id="visualization" class="tab-content">
         <div class="controls">
-          <div class="control-group">
+          <!-- DATASET(S) – picker + Advanced button -->
+          <div class="control-group" id="datasetGroup">
             <label for="datasetSelect">Select Dataset(s):</label>
             <select id="datasetSelect" multiple></select>
-          </div>
 
+            <!-- ▼ now lives inside the same group -->
+            <button id="toggleAdvancedBtn"
+                    class="secondary-button"
+                    style="margin-top:.5rem">
+              Advanced Metrics OFF
+            </button>
+          </div>
+          
           <div class="control-group">
             <label for="metricSelect">Metric:</label>
             <select id="metricSelect">
-              <option value="FrameTime">FrameTime</option>
-              <option value="CPUBusy">CPUBusy</option>
-              <option value="CPUWait">CPUWait</option>
-              <option value="GPULatency">GPULatency</option>
-              <option value="GPUTime">GPUTime</option>
-              <option value="GPUBusy">GPUBusy</option>
-              <option value="GPUWait">GPUWait</option>
-              <option value="DisplayLatency">DisplayLatency</option>
-              <option value="DisplayedTime">DisplayedTime</option>
-              <option value="AnimationError">AnimationError</option>
-              <option value="ClickToPhotonLatency">ClickToPhotonLatency</option>
-              <option value="FPS">FPS (Derived from FrameTime)</option>
             </select>
           </div>
 
@@ -213,20 +209,7 @@
 
           <div class="control-group">
             <label>Select Metrics:</label>
-            <div class="toggle-group" id="statMetricsGroup">
-              <div class="toggle-button active" data-metric="FrameTime">FrameTime</div>
-              <div class="toggle-button" data-metric="CPUWait">CPUWait</div>
-              <div class="toggle-button" data-metric="CPUBusy">CPUBusy</div>
-              <div class="toggle-button" data-metric="GPULatency">GPULatency</div>
-              <div class="toggle-button" data-metric="GPUTime">GPUTime</div>
-              <div class="toggle-button" data-metric="GPUBusy">GPUBusy</div>
-              <div class="toggle-button" data-metric="GPUWait">GPUWait</div>
-              <div class="toggle-button" data-metric="DisplayLatency">DisplayLatency</div>
-              <div class="toggle-button" data-metric="DisplayedTime">DisplayedTime</div>
-              <div class="toggle-button" data-metric="AnimationError">AnimationError</div>
-              <div class="toggle-button" data-metric="ClickToPhotonLatency">ClickToPhotonLatency</div>
-              <div class="toggle-button" data-metric="FPS">FPS</div>
-            </div>
+            <div class="toggle-group" id="statMetricsGroup"></div>
           </div>
 
           <div class="control-group">
@@ -290,20 +273,7 @@
 
           <div class="control-group">
             <label for="testMetricSelect">Metric:</label>
-            <select id="testMetricSelect">
-              <option value="FrameTime">FrameTime</option>
-              <option value="CPUWait">CPUWait</option>
-              <option value="CPUBusy">CPUBusy</option>
-              <option value="GPULatency">GPULatency</option>
-              <option value="GPUTime">GPUTime</option>
-              <option value="GPUBusy">GPUBusy</option>
-              <option value="GPUWait">GPUWait</option>
-              <option value="DisplayLatency">DisplayLatency</option>
-              <option value="DisplayedTime">DisplayedTime</option>
-              <option value="AnimationError">AnimationError</option>
-              <option value="ClickToPhotonLatency">ClickToPhotonLatency</option>
-              <option value="FPS">FPS</option>
-            </select>
+            <select id="testMetricSelect"></select>
           </div>
 
           <div class="control-group">
