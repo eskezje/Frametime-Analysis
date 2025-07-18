@@ -27,7 +27,7 @@ function canonKey(str){          // lower‑case & strip spaces
 const METRIC_BLACKLIST = new Set([
   'Application','GPU','CPU','Resolution','Runtime','ProcessID','SwapChainAddress',
   'PresentFlags','FlipToken', 'AllowsTearing', 'SyncInterval', 'Dropped', 'TimeInSeconds',
-  'CPUStartTime', 
+  'CPUStartTime', 'PresentMode',
 ]);
 
 // global UI flag (default = basic mode)
@@ -71,6 +71,68 @@ function normaliseRow(row){
     row.FrameTime = 1000 / row.FPS;
   }
 }
+
+
+/**
+ * Generic JSON‑table reader (CapFrameX today, other tools tomorrow)
+ * ---------------------------------------------------------------
+ *  • Detects the “per‑frame array” length (taken from MsBetweenPresents).
+ *  • Copies *all* CaptureData fields that are arrays of that length.
+ *  • Still runs normaliseRow() to create FrameTime / FPS aliases.
+ *  • Returns an [] of plain row objects that plug into the rest of
+ *    your pipeline unchanged.
+ */
+function parseCfxJson(text, fileName){
+  let json;
+  try{
+    json = JSON.parse(text);
+  }catch(e){
+    console.warn('Not valid JSON:', fileName);
+    return [];
+  }
+  if (!json?.Runs?.length){
+    console.warn('No Runs[] array in file:', fileName);
+    return [];
+  }
+
+  const rows = [];
+
+  json.Runs.forEach(run=>{
+    const cd = run.CaptureData ?? {};
+
+    // Determine how many frames we have – fall back to longest array
+    let frames = Array.isArray(cd.MsBetweenPresents) ? cd.MsBetweenPresents.length : 0;
+    if (!frames){
+      // grab the first array length we can find
+      for (const v of Object.values(cd)){
+        if (Array.isArray(v)){ frames = v.length; break; }
+      }
+    }
+    if (!frames){ return; }   // nothing useful in this run
+
+    for (let i=0; i<frames; i++){
+      const r = {};
+
+      // copy every per‑frame column
+      Object.entries(cd).forEach(([key,val])=>{
+        if (Array.isArray(val) && i < val.length){
+          r[key] = val[i];
+        }
+      });
+
+      // un‑alias MsBetweenPresents → FrameTime (ms)
+      if (r.MsBetweenPresents != null && r.FrameTime == null){
+        r.FrameTime = r.MsBetweenPresents;      // already in ms
+      }
+
+      normaliseRow(r);          // adds FPS / fills aliases & gaps
+      rows.push(r);
+    }
+  });
+
+  return rows;
+}
+
 
 
 
@@ -164,7 +226,9 @@ function handleFileUpload(e) {
     reader.onload = ev => {
       try {
         const text = ev.target.result;
-        const parsedRows = parseCSV(text);
+        const parsedRows = file.name.toLowerCase().endsWith('.json')
+                                    ? parseCfxJson(text, file.name)
+                                    : parseCSV(text);
         
         if (parsedRows.length === 0) {
           // Check if notify function exists before calling it
