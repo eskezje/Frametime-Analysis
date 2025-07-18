@@ -55,14 +55,12 @@ function getMetricValue(row, metric) {
   return (matchingKey && typeof row[matchingKey] === 'number') ? row[matchingKey] : null;
 }
 
-/**
- * Basic descriptive statistics for an array of numeric values.
- * Includes max, min, avg, stdev, plus some custom percentiles (p1, p01, etc.).
- * Also calculates "1% Low", "0.1% Low", etc. by averaging the worst frames.
- * @param {number[]} arr 
- * @param {string} metricName - Name of the metric being analyzed
- * @returns {Object} e.g. {max, min, avg, stdev, p1, p01, p001, low1, low01, low001}
- */
+function percentileNearestRank(sortedAsc, p) {
+  if (!sortedAsc.length) return NaN;
+  const rank = Math.ceil((p / 100) * sortedAsc.length) - 1;   // 0‑based
+  return sortedAsc[Math.max(0, Math.min(rank, sortedAsc.length - 1))];
+}
+
 function calculateStatistics(arr, metricName = '') {
   if (!arr.length) {
     return {
@@ -72,89 +70,64 @@ function calculateStatistics(arr, metricName = '') {
     };
   }
 
-  // Sort ascending once so we can reuse it
-  const sorted = [...arr].sort((a, b) => a - b);
-  const maxVal = sorted[sorted.length - 1];
+  /* -------- basic aggregates --------------------------------------- */
+  const sorted = [...arr].sort((a, b) => a - b);  // ascending
+  const n      = sorted.length;
+  const maxVal = sorted[n - 1];
   const minVal = sorted[0];
-  const sum = sorted.reduce((a, b) => a + b, 0);
-  const n   = sorted.length;
+  const sum    = sorted.reduce((a, b) => a + b, 0);
 
-  const avg =
-    metricName.toUpperCase() === 'FPS'
-      ? n / sorted.reduce((s, v) => s + 1 / v, 0)
+  const avg = (metricName.toUpperCase() === 'FPS')
+      ? n / sorted.reduce((s, v) => s + 1 / v, 0)   // harmonic mean
       : sum / n;
 
-  // unbiased **sample** stdev (divide by n‑1)
-  const stdev = (typeof jStat !== 'undefined' && typeof jStat.stdev === 'function')
-    ? jStat.stdev(sorted, true)                              // true → use n‑1
-    : Math.sqrt(sorted.reduce((s, v) => s + (v - avg) ** 2, 0) / (n - 1));
+  const stdev = (typeof jStat?.stdev === 'function')
+      ? jStat.stdev(sorted, true)
+      : Math.sqrt(sorted.reduce((s, v) => s + (v - avg) ** 2, 0) / (n - 1));
 
-  // Percentiles (p1 = 1%, p01 = 0.1%, p001 = 0.01%)
-  const p1 = calculatePercentile(sorted, 1);
-  const p01 = calculatePercentile(sorted, 0.1);
-  const p001 = calculatePercentile(sorted, 0.01);
+  /* -------- determine FPS vs Frame‑time ---------------------------- */
+  let isFpsMetric =
+        metricName.toUpperCase() === 'FPS' ||
+        metricName.toLowerCase().includes('fps');
+  if (!metricName && avg > 30 && minVal > 20) isFpsMetric = true;
 
-  // Try to autodetect if it's FPS when metricName is empty by checking the value range
-  // FPS values are typically in the range of 20-300, frametime values are typically 1-33ms
-  let isFpsMetric = (metricName === 'FPS' || metricName.toLowerCase().includes('fps'));
-  
-  // Auto-detect FPS based on data if metric name is empty
-  if (!metricName && avg > 30 && minVal > 20) {
-    isFpsMetric = true;
-  }
+  /* -------- percentiles (single‑frame cut‑off) --------------------- */
+  const p1   = percentileNearestRank(sorted,  isFpsMetric ? 1     : 99);
+  const p01  = percentileNearestRank(sorted,  isFpsMetric ? 0.1   : 99.9);
+  const p001 = percentileNearestRank(sorted,  isFpsMetric ? 0.01  : 99.99);
 
-  // Number of frames in each slice (worst 1%, 0.1%, etc.)
-  const c1 = Math.max(1, Math.ceil(sorted.length * 0.01));   // 1%
-  const c01 = Math.max(1, Math.ceil(sorted.length * 0.001)); // 0.1%
-  const c001 = Math.max(1, Math.ceil(sorted.length * 0.0001)); // 0.01%
+  /* -------- “X % Low” (average of worst frames) -------------------- */
+  const c1   = Math.max(1, Math.ceil(n * 0.01));     // 1 %
+  const c01  = Math.max(1, Math.ceil(n * 0.001));    // 0.1 %
+  const c001 = Math.max(1, Math.ceil(n * 0.0001));   // 0.01 %
 
-  let low1 = NaN, low01 = NaN, low001 = NaN;
+  let low1, low01, low001;
 
   if (isFpsMetric) {
-    //
-    // FPS: "Worst" frames have the LOWEST fps,
-    // so we take the *beginning* of the ascending array.
-    //
-    if (c1 > 0) {
-      low1 = sorted.slice(0, c1).reduce((s, v) => s + v, 0) / c1;
-    }
-    if (c01 > 0) {
-      low01 = sorted.slice(0, c01).reduce((s, v) => s + v, 0) / c01;
-    }
-    if (c001 > 0) {
-      low001 = sorted.slice(0, c001).reduce((s, v) => s + v, 0) / c001;
-    }
-
+    // worst FPS = smallest values (array head)
+    low1   = sorted.slice(0, c1).  reduce((s, v) => s + v, 0) / c1;
+    low01  = sorted.slice(0, c01). reduce((s, v) => s + v, 0) / c01;
+    low001 = sorted.slice(0, c001).reduce((s, v) => s + v, 0) / c001;
   } else {
-    //
-    // FrameTime (or anything else where lower is better): "Worst" frames have the HIGHEST values,
-    // so we reverse the ascending array and take from the top.
-    //
-    const descending = [...sorted].reverse();
-    if (c1 > 0) {
-      low1 = descending.slice(0, c1).reduce((s, v) => s + v, 0) / c1;
-    }
-    if (c01 > 0) {
-      low01 = descending.slice(0, c01).reduce((s, v) => s + v, 0) / c01;
-    }
-    if (c001 > 0) {
-      low001 = descending.slice(0, c001).reduce((s, v) => s + v, 0) / c001;
-    }
+    // worst frame‑times = largest values (array tail)
+    const desc = [...sorted].reverse();
+    low1   = desc.slice(0, c1).  reduce((s, v) => s + v, 0) / c1;
+    low01  = desc.slice(0, c01). reduce((s, v) => s + v, 0) / c01;
+    low001 = desc.slice(0, c001).reduce((s, v) => s + v, 0) / c001;
   }
 
+  /* -------- return -------------------------------------------------- */
   return {
     max: maxVal,
     min: minVal,
     avg,
     stdev,
-    p1,    // 1% percentile (single cutoff)
-    p01,   // 0.1% percentile
-    p001,  // 0.01% percentile
-    low1,  // average of worst 1% of frames
-    low01, // average of worst 0.1%
-    low001 // average of worst 0.01%
+    p1,  p01,  p001,
+    low1, low01, low001
   };
 }
+
+
 
 function calculatePercentile(sortedArr, percentile) {
   // percentile expressed as 1 → 1 %, 0.1 → 0.1 %
