@@ -338,10 +338,9 @@ function detectAvailableMetrics() {
 function updateMetricDropdowns() {
   const availableMetrics = detectAvailableMetrics();
   
-  // Get all metric select elements
   const metricSelects = [
     document.getElementById('metricSelect'),
-    // Add other metric dropdowns if you have them Add test metric select
+    document.getElementById('testMetricSelect')
   ];
   
   metricSelects.forEach(select => {
