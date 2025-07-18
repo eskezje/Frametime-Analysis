@@ -72,109 +72,107 @@ function buildQQPlot(data) {
 
 /**
  * Renders (or re-renders) the Chart.js chart based on the current chartDatasets array.
- * @param {string} chartType - e.g. 'line' | 'scatter' | 'bar' | 'histogram' | 'qqplot' etc.
+ * @param {string} chartType - e.g. 'line' | 'scatter' | 'bar' | 'histogram' | 'qqplot' | 'violin'
  */
 function renderChart(chartType) {
-  const canvas = document.getElementById('mainChart');
-  const chartContainer = document.getElementById('chartContainer');
-  
+  const canvas        = document.getElementById('mainChart');
+  const chartContainer= document.getElementById('chartContainer');
   if (!canvas || !chartContainer) {
     console.warn("Chart elements not found in HTML.");
     return;
   }
 
   const ctx = canvas.getContext('2d');
-  
   if (window.mainChart) {
     window.mainChart.destroy();
   }
-  
   if (!window.chartDatasets.length) {
-    console.log("No datasets to render in chartDatasets.");
     chartContainer.classList.add('empty');
+    console.log("No datasets to render.");
     return;
   }
-
-  // Not empty anymore, remove the empty class
   chartContainer.classList.remove('empty');
 
-  // Default chart is 'line', but if the user picks scatter/histogram/qqplot, adapt:
-  let chartConfigType = chartType === 'scatter' ? 'scatter' : 'line';
+  // Determine controller type & scales
+  let chartConfigType = ['scatter','qqplot'].includes(chartType) ? 'scatter' : 'line';
   const scales = {};
 
   if (chartType === 'histogram') {
     chartConfigType = 'bar';
-    scales.x = {
-      type: 'category',
-      title: { display: true, text: 'Bin Range' }
-    };
-    scales.y = {
-      title: { display: true, text: 'Count' }
-    };
-  } else if (chartType === 'qqplot') {
+    scales.x = { type: 'category', title: { display: true, text: 'Bin Range' } };
+    scales.y = { title: { display: true, text: 'Count' } };
+  }
+  else if (chartType === 'qqplot') {
     chartConfigType = 'scatter';
-    scales.x = {
-      type: 'linear',
-      title: { display: true, text: 'Theoretical Quantiles' }
-    };
-    scales.y = {
-      type: 'linear',
-      title: { display: true, text: 'Sample Quantiles' }
-    };
-  } else {
+    scales.x = { type: 'linear', title: { display: true, text: 'Theoretical Quantiles' } };
+    scales.y = { type: 'linear', title: { display: true, text: 'Sample Quantiles' } };
+  }
+  else if (chartType === 'violin') {
+    chartConfigType = 'violin';
+    scales.x = { type: 'category', title: { display: true, text: 'Dataset' } };
+    scales.y = { type: 'linear',   title: { display: true, text: 'Value'   } };
+  }
+  else {
     // line / scatter default
-    scales.x = {
-      type: 'linear',
-      title: { display: true, text: 'Sample # / Frame #' }
-    };
-    scales.y = {
-      type: 'linear',
-      title: { display: true, text: 'Value' }
-    };
+    scales.x = { type: 'linear', title: { display: true, text: 'Sample # / Frame #' } };
+    scales.y = { type: 'linear', title: { display: true, text: 'Value'            } };
   }
 
   const config = {
     type: chartConfigType,
     data: {
+      // only set labels for violin
+      ...(chartType === 'violin' && { labels: window.chartLabels }),
       datasets: window.chartDatasets
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      scales: scales,
+      scales,
       plugins: {
         tooltip: {
           callbacks: {
-            label: function(context) {
-              const ds = context.dataset;
-              return `${ds.label}: ${context.formattedValue}`;
+            label(ctx) {
+              // for violin, ctx.raw is the array of values; we show dataset label only
+              return chartType === 'violin'
+                ? ctx.dataset.label
+                : `${ctx.dataset.label}: ${ctx.formattedValue}`;
             }
           }
         },
         legend: { display: true },
         zoom: {
-          pan: {
-            enabled: true,
-            mode: 'xy'
-          },
+          pan:  { enabled: true, mode: 'xy' },
           zoom: {
             wheel: { enabled: true },
             pinch: { enabled: true },
-            mode: 'xy',
             drag: {
-              enabled: true,
+              enabled:      true,
               backgroundColor: 'rgba(52,152,219,0.2)',
-              borderColor: 'rgba(52,152,219,0.5)',
-              borderWidth: 1
-            }
+              borderColor:     'rgba(52,152,219,0.5)',
+              borderWidth:     1
+            },
+            mode: 'xy'
           }
         }
-      }
+      },
+      // violin‑specific styling
+      ...(chartType === 'violin' && {
+        elements: {
+          violin: {
+            bandwidth:      5,
+            backgroundColor: window.chartDatasets[0].backgroundColor,
+            borderColor:     window.chartDatasets[0].borderColor,
+            borderWidth:     1,
+            quantile: { median: { color: '#000', lineWidth: 2 } }
+          }
+        }
+      })
     }
   };
 
   window.mainChart = new Chart(ctx, config);
-  console.log("Chart rendered with", window.chartDatasets.length, "dataset(s).");
+  console.log(`Chart rendered (${chartType}) with ${window.chartDatasets.length} dataset(s).`);
 }
 
 /**
@@ -198,117 +196,110 @@ function clearChart() {
 }
 
 /**
- * Add one or more datasets (by index) from allDatasets to the chartDatasets,
- * configured according to user’s selected metric, chart type, color, etc.
- * Then calls renderChart() to display them.
+ * Builds chartDatasets (and for violin, chartLabels) then calls renderChart().
  */
 function addToChart() {
-  // Example based on your original logic:
   const datasetSelect = document.getElementById('datasetSelect');
-  const indices = Array.from(datasetSelect.selectedOptions).map(opt => parseInt(opt.value));
+  const indices = Array.from(datasetSelect.selectedOptions)
+                       .map(o => parseInt(o.value, 10));
   if (!indices.length) {
-    console.error("No datasets selected for charting.");
-    // If you have a notify() function, you could do:
-    // notify("Please select at least one dataset", "warning");
+    console.error("No datasets selected.");
     return;
   }
 
-  const metric = document.getElementById('metricSelect').value;
+  const metric    = document.getElementById('metricSelect').value;
   const chartType = document.getElementById('chartTypeSelect').value;
-  const chosenColor = document.getElementById('colorSelect').value;
+  const color     = document.getElementById('colorSelect').value;
 
-  // For each selected dataset index:
+  // Violin case: one dataset of arrays + separate labels
+  if (chartType === 'violin') {
+    // extract one array per selected dataset
+    const labels = indices.map(i => window.allDatasets[i].name);
+    const groups = indices.map(i =>
+      window.allDatasets[i].rows
+        .map(r => getMetricValue(r, metric))
+        .filter(v => v != null)
+    );
+
+    window.chartLabels   = labels;
+    window.chartDatasets = [{
+      label: `${metric} Distribution`,
+      data: groups,
+      backgroundColor: labels.map(_ => color),
+      borderColor:     labels.map(_ => color),
+      borderWidth: 1,
+      type: 'violin'
+    }];
+
+    renderChart('violin');
+    updateDatasetOrder();    // if you maintain an order list in the UI
+    document.getElementById('clearChartBtn').disabled = false;
+    return;
+  }
+
+  // Non‑violin: append one dataset per selection
   indices.forEach(idx => {
     const ds = window.allDatasets[idx];
-    if (!ds) {
-      console.error(`No dataset found for index ${idx}`);
-      return;
-    }
-
-    // Suppose you have a helper getMetricValue(row, metric) from statsManager
-    const numericValues = ds.rows
+    const values = ds.rows
       .map(r => getMetricValue(r, metric))
-      .filter(v => v !== null && v !== undefined);
+      .filter(v => v != null);
+    if (!values.length) return;
 
-    if (!numericValues.length) {
-      console.warn(`Dataset "${ds.name}" has no valid numeric data for metric "${metric}"`);
-      // notify(`No valid data for ${metric} in ${ds.name}`, "warning");
-      return;
+    let cfg;
+    if (chartType === 'line' || chartType === 'scatter') {
+      cfg = {
+        label: `${ds.name} - ${metric}`,
+        data: values.map((v,i) => ({ x: i+1, y: v })),
+        borderColor:       color,
+        backgroundColor:   color,
+        pointRadius:       chartType==='scatter'?3:1,
+        showLine:          chartType==='line',
+        fill:              chartType==='line'
+      };
     }
-
-    // Build up the dataset config for Chart.js
-    if (chartType === 'line') {
-      window.chartDatasets.push({
+    else if (chartType === 'histogram') {
+      const bins = buildHistogram(values);
+      cfg = {
         label: `${ds.name} - ${metric}`,
-        data: numericValues.map((v, i) => ({ x: i + 1, y: v })),
-        borderColor: chosenColor,
-        backgroundColor: chosenColor,
-        pointRadius: 1,
-        fill: false,
-        showLine: true
-      });
-    } else if (chartType === 'scatter') {
-      window.chartDatasets.push({
-        label: `${ds.name} - ${metric}`,
-        data: numericValues.map((v, i) => ({ x: i + 1, y: v })),
-        borderColor: chosenColor,
-        backgroundColor: chosenColor,
-        pointRadius: 3,
-        showLine: false
-      });
-    } else if (chartType === 'histogram') {
-      const binsObj = buildHistogram(numericValues);
-      window.chartDatasets.push({
-        label: `${ds.name} - ${metric}`,
-        data: binsObj.counts.map((c, i) => ({
-          x: binsObj.labels[i],
-          y: c
-        })),
+        data: bins.counts.map((c,i) => ({ x: bins.labels[i], y: c })),
         type: 'bar',
-        backgroundColor: chosenColor
-      });
-    } else if (chartType === 'qqplot') {
-      const qqData = buildQQPlot(numericValues);
-
-      // Also add a "reference line" from minZ to maxZ
-      const mean = jStat.mean(numericValues);
-      const std = jStat.stdev(numericValues);
-      const minZ = Math.min(...qqData.map(o => o.x));
-      const maxZ = Math.max(...qqData.map(o => o.x));
-      const refLinePoints = [
-        { x: minZ, y: mean + std * minZ },
-        { x: maxZ, y: mean + std * maxZ }
+        backgroundColor: color
+      };
+    }
+    else if (chartType === 'qqplot') {
+      const qq = buildQQPlot(values);
+      const mean = jStat.mean(values), std = jStat.stdev(values);
+      const zs = qq.map(p=>p.x);
+      const linePts = [
+        { x: Math.min(...zs), y: mean + std * Math.min(...zs) },
+        { x: Math.max(...zs), y: mean + std * Math.max(...zs) }
       ];
-
+      // Data points
       window.chartDatasets.push({
         label: `${ds.name} - ${metric} (Data)`,
-        data: qqData,
-        borderColor: chosenColor,
-        backgroundColor: chosenColor,
-        pointRadius: 3,
-        showLine: false
+        data: qq,
+        borderColor:     color,
+        backgroundColor: color,
+        pointRadius:     3,
+        showLine:        false
       });
-      window.chartDatasets.push({
-        label: `${ds.name} - ${metric} (Ref Line)`,
-        data: refLinePoints,
-        borderColor: '#ff0000',
-        backgroundColor: '#ff0000',
-        pointRadius: 0,
-        borderWidth: 2,
-        showLine: true
-      });
+      // Reference line
+      cfg = {
+        label: `${ds.name} - ${metric} (Ref)`,
+        data: linePts,
+        borderColor:   '#f00',
+        backgroundColor:'#f00',
+        pointRadius:   0,
+        borderWidth:   2,
+        showLine:      true
+      };
     }
+    window.chartDatasets.push(cfg);
   });
 
-  // Now render (or re-render) the chart
   renderChart(chartType);
-
-  // Optionally update the dataset order list in the UI
   updateDatasetOrder();
-
-  // Enable the "Clear Chart" button if needed
-  const clearChartBtn = document.getElementById('clearChartBtn');
-  if (clearChartBtn) clearChartBtn.disabled = false;
+  document.getElementById('clearChartBtn').disabled = false;
 }
 
 /**
