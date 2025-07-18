@@ -289,8 +289,8 @@ if (chartType === 'violin') {
         borderColor:     hexColor,
         backgroundColor: hexColor,
         pointRadius:     chartType === 'scatter' ? 3 : 1,
-        showLine:        chartType === 'line',
-        fill:            chartType === 'line'
+        showLine:        chartType === 'line', 
+        fill:            false
       };
     }
     // histogram
