@@ -77,11 +77,17 @@ function calculateStatistics(arr, metricName = '') {
   const maxVal = sorted[sorted.length - 1];
   const minVal = sorted[0];
   const sum = sorted.reduce((a, b) => a + b, 0);
-  const avg = sum / sorted.length;
-  // Use jStat if available, otherwise fall back to a simple implementation
+  const n   = sorted.length;
+
+  const avg =
+    metricName.toUpperCase() === 'FPS'
+      ? n / sorted.reduce((s, v) => s + 1 / v, 0)
+      : sum / n;
+
+  // unbiased **sample** stdev (divide by n‑1)
   const stdev = (typeof jStat !== 'undefined' && typeof jStat.stdev === 'function')
-    ? jStat.stdev(sorted)
-    : Math.sqrt(sorted.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / sorted.length);
+    ? jStat.stdev(sorted, true)                              // true → use n‑1
+    : Math.sqrt(sorted.reduce((s, v) => s + (v - avg) ** 2, 0) / (n - 1));
 
   // Percentiles (p1 = 1%, p01 = 0.1%, p001 = 0.01%)
   const p1 = calculatePercentile(sorted, 1);
@@ -150,22 +156,18 @@ function calculateStatistics(arr, metricName = '') {
   };
 }
 
-/**
- * Calculates the given percentile (like 1% or 0.1%) from a sorted array.
- * @param {number[]} sortedArr - Must be pre-sorted ascending.
- * @param {number} percentile - e.g. 1 => 1%, 0.1 => 0.1%
- * @returns {number} The percentile value, or NaN if array is empty.
- */
 function calculatePercentile(sortedArr, percentile) {
+  // percentile expressed as 1 → 1 %, 0.1 → 0.1 %
   if (!sortedArr.length) return NaN;
-  // percentile is from 0..100. e.g. percentile=1 => 1%
-  const index = (percentile / 100) * (sortedArr.length - 1);
-  const lower = Math.floor(index);
-  const upper = Math.ceil(index);
-  if (lower === upper) {
-    return sortedArr[lower];
-  }
-  return sortedArr[lower] + (sortedArr[upper] - sortedArr[lower]) * (index - lower);
+
+  const idx = (percentile / 100) * (sortedArr.length - 1);
+  const lower = Math.floor(idx);
+  const upper = Math.min(sortedArr.length - 1, Math.ceil(idx));
+
+  if (lower === upper) return sortedArr[lower];
+
+  const w = idx - lower;               // linear interpolation weight
+  return sortedArr[lower] * (1 - w) + sortedArr[upper] * w;
 }
 
 /**
@@ -254,8 +256,8 @@ function analyzeFramePacing(frametimes) {
     ? jStat.mean(diffs)
     : diffs.reduce((a, b) => a + b, 0) / diffs.length;
   const stdevDiff = (typeof jStat !== 'undefined' && typeof jStat.stdev === 'function')
-    ? jStat.stdev(diffs)
-    : Math.sqrt(diffs.reduce((s, v) => s + Math.pow(v - avgDiff, 2), 0) / diffs.length);
+    ? jStat.stdev(diffs, true)
+    : Math.sqrt(diffs.reduce((s, v) => s + (v - avgDiff) ** 2, 0) / (diffs.length - 1));
 
   // 6. Define consistency as a function of medianRelDev
   // Tuned with alpha parameter for sensitivity
