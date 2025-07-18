@@ -180,6 +180,7 @@ function renderChart(chartType) {
  * Clears the current chart (removes all datasets from chartDatasets).
  */
 function clearChart() {
+  window.currentChartType = null;
   window.chartDatasets.length = 0;
   if (window.mainChart) {
     window.mainChart.destroy();
@@ -220,8 +221,17 @@ function addToChart() {
   const chartType = document.getElementById('chartTypeSelect').value;
   const hexColor  = document.getElementById('colorSelect').value;
 
-  // clear out any previous
-  window.chartDatasets = [];
+  // If this is the very first dataset, remember what chart‑type we started with
+  if (!window.chartDatasets.length) {
+    window.currentChartType = chartType;       // new global flag
+  }
+  
+  // Disallow mixing chart types on the same grid
+  if (window.chartDatasets.length && chartType !== window.currentChartType) {
+    notify(`You already started a “${window.currentChartType}” chart.
+  Clear the chart first if you want to switch to “${chartType}”.`, 'warning');
+    return;
+  }
 
   // ---- VIOLIN + BOXPLOT COMBO ----
 if (chartType === 'violin') {
@@ -396,66 +406,55 @@ function removeDataset(index) {
 }
 
 /**
- * Rebuild the <ul> that shows the user the order of charted datasets,
- * so they can reorder them or see which is on top/bottom, etc.
+ * Re‑build the UL that shows the stacking order.
+ * Called after every add / move / remove.
  */
-function updateDatasetOrder() {
+function updateDatasetOrder () {
   const orderList = document.getElementById('datasetOrderList');
   if (!orderList) return;
 
   orderList.innerHTML = '';
+
   window.chartDatasets.forEach((dataset, index) => {
-    const listItem = document.createElement('li');
-    listItem.className = 'dataset-order-item';
-    listItem.dataset.index = index; // Store the current index
+    const li = document.createElement('li');
+    li.className      = 'dataset-order-item';
+    li.dataset.index  = index;               // keep the index on the node
 
-    // A small color indicator
-    const colorDiv = document.createElement('div');
-    colorDiv.className = 'dataset-color';
-    colorDiv.style.backgroundColor = dataset.backgroundColor || '#ccc';
+    /* small colour blob */
+    const swatch = document.createElement('div');
+    swatch.className = 'dataset-color';
+    swatch.style.background =
+      Array.isArray(dataset.backgroundColor)
+        ? dataset.backgroundColor[0]
+        : dataset.backgroundColor || '#888';
 
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = dataset.label;
+    /* label */
+    const name = document.createElement('span');
+    name.textContent = dataset.label;
 
-    // Controls: up/down/remove buttons
-    const controlsDiv = document.createElement('div');
-    controlsDiv.className = 'dataset-order-controls';
+    /* up / down / remove controls */
+    const controls = document.createElement('div');
+    controls.className = 'dataset-order-controls';
 
-    const upBtn = document.createElement('button');
-    upBtn.textContent = '↑';
-    upBtn.title = 'Move Up';
-    // Use a closure to capture the current index
-    upBtn.addEventListener('click', (function(currentIndex) {
-      return function() { moveDataset(currentIndex, 'up'); };
-    })(index));
+    const mkBtn = (txt, title, cb) => {
+      const b = document.createElement('button');
+      b.textContent = txt;
+      b.title       = title;
+      b.addEventListener('click', () => cb(index));
+      return b;
+    };
 
-    const downBtn = document.createElement('button');
-    downBtn.textContent = '↓';
-    downBtn.title = 'Move Down';
-    // Use a closure to capture the current index
-    downBtn.addEventListener('click', (function(currentIndex) {
-      return function() { moveDataset(currentIndex, 'down'); };
-    })(index));
-    
-    const removeBtn = document.createElement('button');
-    removeBtn.textContent = '×';
-    removeBtn.title = 'Remove from Chart';
-    removeBtn.className = 'remove-dataset-btn';
-    // Use a closure to capture the current index
-    removeBtn.addEventListener('click', (function(currentIndex) {
-      return function() { removeDataset(currentIndex); };
-    })(index));
+    controls.append(
+      mkBtn('↑','Move up'  , i => moveDataset(i,'up'  )),
+      mkBtn('↓','Move down', i => moveDataset(i,'down')),
+      mkBtn('×','Remove'   , i => removeDataset(i)     )
+    );
 
-    controlsDiv.appendChild(upBtn);
-    controlsDiv.appendChild(downBtn);
-    controlsDiv.appendChild(removeBtn);
-
-    listItem.appendChild(colorDiv);
-    listItem.appendChild(nameSpan);
-    listItem.appendChild(controlsDiv);
-    orderList.appendChild(listItem);
+    li.append(swatch, name, controls);
+    orderList.append(li);
   });
 }
+
 
 /**
  * Displays raw data from a selected dataset
