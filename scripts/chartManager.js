@@ -88,7 +88,7 @@ function buildQQPlot(data) {
 
 /**
  * Renders (or re‑renders) the Chart.js chart based on the current chartDatasets array.
- * @param {string} chartType - 'line' | 'scatter' | 'bar' | 'histogram' | 'qqplot' | 'violin'
+ * @param {string} chartType - 'line' | 'scatter' | 'bar' | 'histogram' | 'qqplot' | 'violin' | 'boxplot'
  */
 function renderChart(chartType) {
   const canvas = document.getElementById('mainChart');
@@ -128,6 +128,10 @@ function renderChart(chartType) {
     scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
   } else if (chartType === 'violin') {
     ctrlType = 'violin';
+    scales.x = { type: 'category', title: { display: true, text: 'Dataset' } };
+    scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
+  } else if (chartType === 'boxplot') {
+    ctrlType = 'boxplot';
     scales.x = { type: 'category', title: { display: true, text: 'Dataset' } };
     scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
   } else {
@@ -182,11 +186,10 @@ function renderChart(chartType) {
     }
   };
 
-  // if violin, we already have 2 datasets: violin & boxplot
-  // axis labels come from chartLabels
-  if (chartType === 'violin') {
+  // if violin or boxplot we rely on category labels stored in chartLabels
+  if (chartType === 'violin' || chartType === 'boxplot') {
     cfg.data.labels = window.chartLabels.slice();
-    // we let each dataset carry its own .type and .order
+    // we let each dataset carry its own .type and .order when needed
   }
 
   window.mainChart = new Chart(ctx, cfg);
@@ -252,7 +255,7 @@ function addToChart() {
   }
 
   // ---- VIOLIN + BOXPLOT COMBO ----
-if (chartType === 'violin') {
+  if (chartType === 'violin') {
   const labels = indices.map(i => allDatasets[i].name);
   const groups = indices.map(i =>
     allDatasets[i].rows
@@ -295,9 +298,36 @@ if (chartType === 'violin') {
   window.chartDatasets = [violinDs, boxDs];
   renderChart('violin');
   updateDatasetOrder();
-  clearChartBtn.disabled = false;
+  document.getElementById('clearChartBtn').disabled = false;
   return;
-}
+  }
+
+  // ---- BOXPLOT ONLY ----
+  if (chartType === 'boxplot') {
+    const labels = indices.map(i => allDatasets[i].name);
+    const groups = indices.map(i =>
+      allDatasets[i].rows
+        .map(r => getMetricValue(r, metric))
+        .filter(v => v != null)
+    );
+
+    window.chartLabels = labels.slice();
+
+    const boxDs = {
+      label:           `${metric} Quartiles`,
+      type:            'boxplot',
+      data:            groups,
+      backgroundColor: labels.map(() => hexToRgba(hexColor, 0.4)),
+      borderColor:     labels.map(() => hexToRgba(hexColor, 1.0)),
+      borderWidth:     2
+    };
+
+    window.chartDatasets = [boxDs];
+    renderChart('boxplot');
+    updateDatasetOrder();
+    document.getElementById('clearChartBtn').disabled = false;
+    return;
+  }
 
 
   // ---- ALL OTHER CHART TYPES ----
