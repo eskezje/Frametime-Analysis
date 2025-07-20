@@ -1229,3 +1229,132 @@ pre {
   display:flex;
   flex-direction:column;
 }
+
+/* Action buttons under Advanced Metrics */
+#datasetGroup .chart-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+#datasetGroup .chart-actions button {
+  flex: 1 1 auto;
+  height: 34px;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
+/* Slight tightening if multiselect is tall */
+#datasetGroup {
+  min-width: 190px;
+}
+
+/* Inline rows for visualization controls */
+.viz-inline-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-top: .25rem;
+}
+.viz-inline-row.secondary {
+  margin-top: .35rem;
+}
+
+/* Make the groups a bit narrower & consistent */
+.control-group.compact {
+  min-width: 170px;
+  flex: 1 1 170px;
+}
+
+.color-group {
+  max-width: 260px;
+}
+
+.color-picker-container.slim {
+  gap: 6px;
+}
+
+.color-picker-container.slim input[type="color"] {
+  width: 42px;
+  height: 34px;
+  padding: 0;
+}
+
+.secondary-button.mini {
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.1;
+}
+
+/* Time-based X smaller label */
+.time-toggle {
+  display: flex;
+  align-items: flex-end;
+  flex: 0 1 160px;
+  min-width: 140px;
+}
+
+.time-toggle .tiny-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.time-toggle .tiny-label input {
+  margin: 0;
+  transform: translateY(1px);
+}
+
+.time-toggle .tiny-label .sub {
+  font-weight: normal;
+  font-size: 11px;
+  color: #888;
+  letter-spacing: .2px;
+  margin-left: 2px;
+}
+
+/* Dark theme tweaks */
+.dark-theme .time-toggle .tiny-label {
+  color: #ccc;
+}
+.dark-theme .time-toggle .tiny-label .sub {
+  color: #999;
+}
+
+/* Slight tightening of selects in compact groups */
+.control-group.compact select {
+  max-width: 210px;
+}
+
+/* Responsive: stack gracefully */
+@media (max-width: 820px) {
+  .viz-inline-row {
+    flex-direction: row;
+  }
+  .time-toggle {
+    flex: 1 1 140px;
+  }
+}
+
+@media (max-width: 560px) {
+  .viz-inline-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .control-group.compact,
+  .time-toggle,
+  .color-group {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+  .color-picker-container.slim {
+    flex-wrap: wrap;
+  }
+}

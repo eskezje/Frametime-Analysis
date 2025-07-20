@@ -133,51 +133,60 @@
             <label for="datasetSelect">Select Dataset(s):</label>
             <select id="datasetSelect" multiple></select>
 
-            <!-- ▼ now lives inside the same group -->
             <button id="toggleAdvancedBtn"
                     class="secondary-button"
                     style="margin-top:.5rem">
               Advanced Metrics OFF
             </button>
+
+            <!-- NEW: action buttons moved here -->
+            <div class="chart-actions">
+              <button id="addToChartBtn">Add to Chart</button>
+              <button id="clearChartBtn" disabled>Clear Chart</button>
+            </div>
           </div>
           
-          <div class="control-group">
-            <label for="metricSelect">Metric:</label>
-            <select id="metricSelect">
-            </select>
-          </div>
+          <div class="viz-inline-row">
+            <div class="control-group compact">
+              <label for="metricSelect">Metric:</label>
+              <select id="metricSelect"></select>
+            </div>
 
-          <div class="control-group">
-            <label for="chartTypeSelect">Chart Type:</label>
-            <select id="chartTypeSelect">
-              <option value="line">Line Chart</option>
-              <option value="scatter">Scatter Plot</option>
-              <option value="histogram">Histogram</option>
-              <option value="qqplot">Q-Q Plot</option>
-              <option value="violin">Violin Plot</option>
-            </select>
-          </div>
-
-          <div class="control-group">
-            <label>
-              <input type="checkbox" id="useValueX">
-              Time‑based X (use timestamp column)
-            </label>
-          </div>
-
-          <div class="control-group">
-            <label for="colorSelect">Color:</label>
-            <div class="color-picker-container">
-              <input type="color" id="colorSelect" value="#4bc0c0" />
-              <div class="color-preview" id="colorPreview" style="background-color: #4bc0c0;"></div>
-              <button id="randomColorBtn" class="secondary-button" aria-label="Generate random color">
-                Random
-              </button>
+            <div class="control-group compact">
+              <label for="chartTypeSelect">Chart Type:</label>
+              <select id="chartTypeSelect">
+                <option value="line">Line Chart</option>
+                <option value="scatter">Scatter Plot</option>
+                <option value="histogram">Histogram</option>
+                <option value="qqplot">Q-Q Plot</option>
+                <option value="violin">Violin Plot</option>
+              </select>
             </div>
           </div>
 
+          <div class="viz-inline-row secondary">
+            <div class="control-group compact color-group">
+              <label for="colorSelect">Color:</label>
+              <div class="color-picker-container slim">
+                <input type="color" id="colorSelect" value="#4bc0c0" />
+                <div class="color-preview" id="colorPreview" style="background-color:#4bc0c0;"></div>
+                <button id="randomColorBtn" class="secondary-button mini" aria-label="Generate random color">
+                  Random
+                </button>
+              </div>
+            </div>
+
+            <div class="control-group compact time-toggle">
+              <label class="tiny-label" for="useValueX">
+                <input type="checkbox" id="useValueX">
+                Time‑based X <span class="sub">(timestamp)</span>
+              </label>
+            </div>
+          </div>
+
+<!-- 
           <button id="addToChartBtn">Add to Chart</button>
-          <button id="clearChartBtn" disabled>Clear Chart</button>
+          <button id="clearChartBtn" disabled>Clear Chart</button> -->
         </div>
 
         <div class="card">
