@@ -1,8 +1,7 @@
-// main.js
 document.addEventListener('DOMContentLoaded', () => {
-  const savedTheme     = localStorage.getItem('theme');
-  const prefersDark    = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const themeIcon      = document.getElementById('themeIcon');
+  const savedTheme  = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const themeIcon   = document.getElementById('themeIcon');
 
   if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
     document.body.classList.add('dark-theme');
@@ -11,7 +10,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   updateMetricDropdowns();
 
-  // Set up advanced metrics toggle
+  window.useValueX = false;
+  const useValueXChk = document.getElementById('useValueX');
+  if (useValueXChk) {
+    useValueXChk.addEventListener('change', () => {
+      window.useValueX = useValueXChk.checked;
+      if (window.mainChart &&
+          (window.currentChartType === 'line' || window.currentChartType === 'scatter') &&
+          typeof window.rebuildCurrentLineScatterDatasets === 'function') {
+        window.rebuildCurrentLineScatterDatasets();
+        window.renderChart(window.currentChartType);
+      }
+    });
+  }
+
+  // Advanced metrics toggle
   const advBtn = document.getElementById('toggleAdvancedBtn');
   if (advBtn) {
     advBtn.addEventListener('click', () => {
@@ -183,6 +196,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize dataset selects on page load
   populateAllDatasetSelects();
+
+  const datasetSelect = document.getElementById('datasetSelect');
+  if (datasetSelect) {
+    datasetSelect.addEventListener('change', () => {
+      updateMetricDropdowns();
+    });
+  }
 
   // Initialize chart container empty state
   const chartContainer = document.getElementById('chartContainer');

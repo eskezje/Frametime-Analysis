@@ -1,5 +1,3 @@
-// dataManager.js
-
 // We'll store multiple datasets in memory
 window.allDatasets = [];
 
@@ -333,66 +331,132 @@ function detectAvailableMetrics() {
 }
 
 /**
- * Populates metric dropdowns based on available metrics in loaded datasets
+ * Build metric list based on selected datasets.
+ * - If no dataset selected: union of all numeric columns (still respects basic vs advanced).
+ * - If ≥1 selected: intersection of numeric columns across them.
+ * - Always ensure FrameTime / FPS present if derivable.
  */
 function updateMetricDropdowns() {
-  const availableMetrics = detectAvailableMetrics();
-  
   const metricSelects = [
     document.getElementById('metricSelect'),
     document.getElementById('testMetricSelect')
   ];
-  
-  metricSelects.forEach(select => {
-    if (!select) return;
-    
-    // Save the currently selected value
-    const currentValue = select.value;
-    
-    // Clear the dropdown
-    select.innerHTML = '';
-    
-    // Add each available metric as an option
-    availableMetrics.forEach(metric => {
-      const option = document.createElement('option');
-      option.value = metric;
-      option.textContent = getMetricDisplayName(metric);
-      select.appendChild(option);
+  const statsMetricGroup = document.getElementById('statMetricsGroup');
+  const dsSelect = document.getElementById('datasetSelect');
+
+  // Helper: collect numeric columns from a dataset (looking across a few rows)
+  function numericColumns(ds) {
+    if (!ds?.rows?.length) return new Set();
+    const cols = Object.keys(ds.rows[0] || {});
+    const numeric = new Set();
+    cols.forEach(col => {
+      // skip blacklisted
+      if (METRIC_BLACKLIST.has(col)) return;
+      // probe up to first 15 rows to see if any numeric value appears
+      for (let i = 0; i < Math.min(15, ds.rows.length); i++) {
+        const v = ds.rows[i][col];
+        if (v === null || v === '' || v === undefined) continue;
+        const num = Number(v);
+        if (Number.isFinite(num)) {
+          numeric.add(col);
+          break;
+        }
+      }
     });
-    
-    // Try to restore the previous selection if it's still available
-    if (availableMetrics.includes(currentValue)) {
-      select.value = currentValue;
-    } else if (availableMetrics.includes('FrameTime')) {
-      select.value = 'FrameTime';
-    } else if (availableMetrics.includes('FPS')) {
-      select.value = 'FPS';
+    // Make sure FrameTime / FPS appear if derived
+    if (ds.rows.some(r => Number.isFinite(r.FrameTime))) numeric.add('FrameTime');
+    if (ds.rows.some(r => Number.isFinite(r.FPS)))       numeric.add('FPS');
+    return numeric;
+  }
+
+  // Determine selection
+  const selectedIdxs = dsSelect
+    ? Array.from(dsSelect.selectedOptions).map(o => +o.value)
+    : [];
+
+  let metrics;
+
+  if (!selectedIdxs.length) {
+    // UNION
+    const union = new Set();
+    (window.allDatasets || []).forEach(ds => {
+      numericColumns(ds).forEach(c => union.add(c));
+    });
+    metrics = Array.from(union);
+  } else {
+    // INTERSECTION
+    let inter = null;
+    selectedIdxs.forEach(idx => {
+      const cols = numericColumns(window.allDatasets[idx]);
+      if (inter == null) {
+        inter = new Set(cols);
+      } else {
+        inter = new Set([...inter].filter(c => cols.has(c)));
+      }
+    });
+    metrics = inter ? Array.from(inter) : [];
+  }
+
+  // Basic vs advanced mode: if basic, restrict to FrameTime & FPS only (if present)
+  if (!window.showAdvancedMetrics) {
+    metrics = metrics.filter(m => m === 'FrameTime' || m === 'FPS');
+  }
+
+  // Sort alpha for stability
+  metrics.sort((a,b) => a.localeCompare(b));
+
+  // --- Populate dropdowns ---
+  const previousValues = metricSelects.map(sel => sel && sel.value);
+
+  metricSelects.forEach(sel => {
+    if (!sel) return;
+    sel.innerHTML = '';
+    metrics.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = getMetricDisplayName(m);
+      sel.appendChild(opt);
+    });
+  });
+
+  // Try restore old selection
+  metricSelects.forEach((sel,i) => {
+    if (!sel) return;
+    const prev = previousValues[i];
+    if (prev && metrics.includes(prev)) {
+      sel.value = prev;
+    } else if (metrics.includes('FrameTime')) {
+      sel.value = 'FrameTime';
+    } else if (metrics.includes('FPS')) {
+      sel.value = 'FPS';
     }
   });
-  
-  // Also update the metric toggle buttons in statistics tab
-  const metricGroup = document.getElementById('statMetricsGroup');
-  if (metricGroup) {
-    // Clear existing buttons
-    metricGroup.innerHTML = '';
-    
-    // Add a toggle button for each available metric
-    availableMetrics.forEach(metric => {
+
+  // Statistics tab toggle buttons
+  if (statsMetricGroup) {
+    statsMetricGroup.innerHTML = '';
+    metrics.forEach(m => {
       const btn = document.createElement('button');
       btn.className = 'toggle-button';
-      btn.dataset.metric = metric;
-      btn.textContent = getMetricDisplayName(metric);
-      
-      // Activate FrameTime and FPS by default
-      if (metric === 'FrameTime' || metric === 'FPS') {
-        btn.classList.add('active');
-      }
-      
+      btn.dataset.metric = m;
+      btn.textContent = getMetricDisplayName(m);
+      if (m === 'FrameTime' || m === 'FPS') btn.classList.add('active');
       btn.addEventListener('click', () => btn.classList.toggle('active'));
-      metricGroup.appendChild(btn);
+      statsMetricGroup.appendChild(btn);
     });
   }
+
+  // Disable selects if empty
+  metricSelects.forEach(sel => {
+    if (!sel) return;
+    sel.disabled = metrics.length === 0;
+  });
+
+  if (metrics.length === 0 && selectedIdxs.length > 1) {
+    notify('No common numeric metrics across selected datasets.', 'warning');
+  }
 }
+
 
 /**
  * Returns a user-friendly display name for a metric

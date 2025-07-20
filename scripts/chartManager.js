@@ -1,5 +1,3 @@
-// chartManager.js
-
 // We'll store the Chart.js instance & chart-specific data arrays
 window.mainChart = null;
 window.chartDatasets = [];
@@ -43,6 +41,24 @@ function buildHistogram(data) {
     labels.push(`${rangeStart}-${rangeEnd}`);
   }
   return { labels, counts };
+}
+
+function extractRowTimestamp(row) {
+  if (!row || typeof row !== 'object') return null;
+  for (const key in row) {
+    if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
+    const lk = key.toLowerCase();
+    if (
+      lk === 'timestamp' ||
+      lk.includes('elapsed time') ||
+      lk.includes('timestamp (elapsed time in seconds)') ||
+      (lk.startsWith('time') && lk.includes('seconds'))
+    ) {
+      const v = parseFloat(row[key]);
+      if (Number.isFinite(v)) return v;
+    }
+  }
+  return null;
 }
 
 /**
@@ -96,6 +112,8 @@ function renderChart(chartType) {
   // determine controller type & axes
   let ctrlType = 'line';
   const scales = {};
+  const useValueX = document.getElementById('useValueX')?.checked;
+  const xTitleSample = useValueX ? 'Time (s)' : 'Sample # / Frame #';
   if (chartType === 'histogram') {
     ctrlType = 'bar';
     scales.x = { type: 'category', title: { display: true, text: 'Bin Range' } };
@@ -106,14 +124,14 @@ function renderChart(chartType) {
     scales.y = { type: 'linear', title: { display: true, text: 'Sample Quantiles' } };
   } else if (chartType === 'scatter') {
     ctrlType = 'scatter';
-    scales.x = { type: 'linear', title: { display: true, text: 'Sample # / Frame #' } };
+    scales.x = { type: 'linear', title: { display: true, text: xTitleSample } };
     scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
   } else if (chartType === 'violin') {
     ctrlType = 'violin';
     scales.x = { type: 'category', title: { display: true, text: 'Dataset' } };
     scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
   } else {
-    scales.x = { type: 'linear', title: { display: true, text: 'Sample # / Frame #' } };
+    scales.x = { type: 'linear', title: { display: true, text: xTitleSample } };
     scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
   }
 
@@ -293,14 +311,35 @@ if (chartType === 'violin') {
     let cfg;
     // line & scatter
     if (chartType === 'line' || chartType === 'scatter') {
+      const useValueX = document.getElementById('useValueX')?.checked;
+
+      // Rebuild data points from rows so we can align each kept value with its timestamp
+      const dataPoints = [];
+      ds.rows.forEach(r => {
+        const val = getMetricValue(r, metric);
+        if (val == null) return;
+
+        let xVal;
+        if (useValueX) {
+          const ts = extractRowTimestamp(r);
+          xVal = (ts != null) ? ts : (dataPoints.length + 1);  // fallback to sequential index
+        } else {
+          xVal = dataPoints.length + 1; // simple sample/frame #
+        }
+        dataPoints.push({ x: xVal, y: val });
+      });
+
+      if (!dataPoints.length) return;
+
       cfg = {
         label:           `${ds.name} - ${metric}`,
-        data:            vals.map((v,i) => ({ x: i+1, y: v })),
+        data:            dataPoints,
         borderColor:     hexColor,
         backgroundColor: hexColor,
         pointRadius:     chartType === 'scatter' ? 3 : 1,
-        showLine:        chartType === 'line', 
-        fill:            false
+        showLine:        chartType === 'line',
+        fill:            false,
+        parsing:         false   // makes sure Chart.js uses the provided x,y directly
       };
     }
     // histogram

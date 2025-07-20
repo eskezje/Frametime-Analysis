@@ -1,5 +1,3 @@
-// testManager.js
-
 /**
  * Orchestrates running whichever test the user selected (#testSelect)
  * against either two datasets or a single dataset vs. fixed value.

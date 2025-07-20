@@ -1,5 +1,3 @@
-// statsManager.js
-
 /**
  * Retrieves the numeric value of a given metric from a row object.
  * Supports both standard metrics and PresentMon-style CSV formats.
