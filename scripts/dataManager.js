@@ -6,6 +6,19 @@ window.allDatasets = [];
  */
 function clearAllDatasets() {
   window.allDatasets.length = 0;
+
+  // Reset chart state so stale series do not remain visible after clearing datasets.
+  if (typeof window.clearChart === 'function') {
+    window.clearChart();
+  }
+
+  // Reset Raw Data panel state.
+  const rawDataElement = document.getElementById('rawData');
+  const rawDataInfo = document.querySelector('.raw-data-info');
+  if (rawDataElement) rawDataElement.textContent = '';
+  if (rawDataInfo) rawDataInfo.textContent = 'Select a dataset to view its raw content.';
+  document.getElementById('rawDataPagination')?.remove();
+
   refreshDatasetLists();
   console.log("All datasets cleared.");
 }
@@ -143,24 +156,27 @@ function parseCfxJson(text, fileName){
 function parseCSV(text) {
   text = text.replace(/\r\n|\r|\n/g, '\n').trim();
   const lines = text.split('\n');
-  if (!lines.length) return [];
+  if (!lines.length || !lines[0].trim()) return [];
 
   const delimiter = [',','\t',';'].sort(
     (a,b)=> lines[0].split(b).length - lines[0].split(a).length
   )[0];
 
   const headers = parseCSVLine(lines[0], delimiter);
-  return lines.slice(1).map(line => {
-    const vals = parseCSVLine(line, delimiter);
-    const obj  = {};
-    headers.forEach((h,i)=>{
-      const raw = vals[i]?.trim() ?? '';
-      const num = Number(raw);
-      obj[h] = Number.isFinite(num) ? num : raw || null;
+  return lines
+    .slice(1)
+    .filter(line => line.trim() !== '')
+    .map(line => {
+      const vals = parseCSVLine(line, delimiter);
+      const obj  = {};
+      headers.forEach((h,i)=>{
+        const raw = vals[i]?.trim() ?? '';
+        const num = Number(raw);
+        obj[h] = Number.isFinite(num) ? num : raw || null;
+      });
+      normaliseRow(obj);
+      return obj;
     });
-    normaliseRow(obj);
-    return obj;
-  });
 }
 
 
@@ -215,8 +231,29 @@ function handleFileUpload(e) {
   const files = e.target.files;
   if (!files.length) return;
 
+  const inputElement = e.target;
+  const totalFiles = files.length;
+  let processedCount = 0;
   let successCount = 0;
   let errorCount = 0;
+
+  function finishOneFile() {
+    processedCount++;
+    if (processedCount !== totalFiles) return;
+
+    refreshDatasetLists();
+    const summary = `Loaded ${successCount} file(s). ${errorCount > 0 ? `${errorCount} file(s) had errors.` : ''}`.trim();
+    if (typeof window.notify === 'function') {
+      window.notify(summary, errorCount > 0 ? 'warning' : 'success');
+    } else {
+      console.log(summary);
+    }
+
+    // Allow selecting the same file(s) again in the native file input.
+    if (inputElement && 'value' in inputElement) {
+      inputElement.value = '';
+    }
+  }
 
   Array.from(files).forEach(file => {
     const reader = new FileReader();
@@ -236,6 +273,7 @@ function handleFileUpload(e) {
             console.warn(`No valid data rows found in ${file.name}`);
           }
           errorCount++;
+          finishOneFile();
           return;
         }
 
@@ -245,23 +283,14 @@ function handleFileUpload(e) {
         };
         window.allDatasets.push(datasetObj);
         successCount++;
-        
-        // Only refresh if all files have been processed
-        if (successCount + errorCount === files.length) {
-          refreshDatasetLists();
-          if (typeof window.notify === 'function') {
-            window.notify(`Loaded ${successCount} file(s). ${errorCount > 0 ? errorCount + ' file(s) had errors.' : ''}`, 
-                       errorCount > 0 ? 'warning' : 'success');
-          } else {
-            console.log(`Loaded ${successCount} file(s). ${errorCount > 0 ? errorCount + ' file(s) had errors.' : ''}`);
-          }
-        }
+        finishOneFile();
       } catch (error) {
         console.error(`Error parsing ${file.name}:`, error);
         if (typeof window.notify === 'function') {
           window.notify(`Error parsing ${file.name}: ${error.message}`, 'error');
         }
         errorCount++;
+        finishOneFile();
       }
     };
     
@@ -272,6 +301,7 @@ function handleFileUpload(e) {
         console.error(`Failed to read ${file.name}`);
       }
       errorCount++;
+      finishOneFile();
     };
     
     reader.readAsText(file);
@@ -285,18 +315,26 @@ function handleFileUpload(e) {
 function refreshDatasetLists() {
   // Show list in the "Uploaded Datasets" panel
   const ul = document.getElementById('datasetList');
-  ul.innerHTML = window.allDatasets
-    .map(ds => `<li>${ds.name} (${ds.rows.length} rows)</li>`)
-    .join('');
+  if (ul) {
+    ul.innerHTML = '';
+    window.allDatasets.forEach(ds => {
+      const li = document.createElement('li');
+      li.textContent = `${ds.name} (${ds.rows.length} rows)`;
+      ul.appendChild(li);
+    });
+  }
 
   // Enable or disable "Clear All" button
-  document.getElementById('clearAllDatasets').disabled = (window.allDatasets.length === 0);
+  const clearAllBtn = document.getElementById('clearAllDatasets');
+  if (clearAllBtn) {
+    clearAllBtn.disabled = (window.allDatasets.length === 0);
+  }
 
   // Toggle the "No datasets" info message
-  document.getElementById('datasetsEmpty').classList.toggle(
-    'hidden',
-    window.allDatasets.length > 0
-  );
+  const emptyMessage = document.getElementById('datasetsEmpty');
+  if (emptyMessage) {
+    emptyMessage.classList.toggle('hidden', window.allDatasets.length > 0);
+  }
 
   // Use the centralized function from main.js to update all selects
   if (typeof window.populateAllDatasetSelects === 'function') {
@@ -453,7 +491,9 @@ function updateMetricDropdowns() {
   });
 
   if (metrics.length === 0 && selectedIdxs.length > 1) {
-    notify('No common numeric metrics across selected datasets.', 'warning');
+    if (typeof window.notify === 'function') {
+      window.notify('No common numeric metrics across selected datasets.', 'warning');
+    }
   }
 }
 

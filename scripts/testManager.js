@@ -300,13 +300,18 @@ function runVarianceTest(a, b, resultsDiv) {
   const cv2 = (Math.sqrt(var2) / mean2) * 100; // as percentage
   
   // F-test for variance ratio
-  const F = var1 > var2 ? var1 / var2 : var2 / var1;
+  const F = (var1 === 0 && var2 === 0) ? 1 : (var1 > var2 ? var1 / var2 : var2 / var1);
   const numeratorDof = var1 > var2 ? n1 - 1 : n2 - 1;
   const denominatorDof = var1 > var2 ? n2 - 1 : n1 - 1;
   
-  // Calculate p-value (two-tailed)
-  let pValue = 2 * (1 - jStat.ftest(F, numeratorDof, denominatorDof));
-  if (pValue > 1) pValue = 2 - pValue; // Adjust for two-tailed test
+  // Calculate p-value (two-tailed). jStat.ftest returns an upper-tail p-value.
+  let upperTailP;
+  if (typeof jStat?.centralF?.cdf === 'function') {
+    upperTailP = 1 - jStat.centralF.cdf(F, numeratorDof, denominatorDof);
+  } else {
+    upperTailP = jStat.ftest(F, numeratorDof, denominatorDof);
+  }
+  let pValue = Number.isFinite(upperTailP) ? Math.min(1, Math.max(0, 2 * upperTailP)) : NaN;
   
   // Calculate effect size - we'll use natural logarithm of F
   // This converts the ratio to a more comparable scale
@@ -481,11 +486,13 @@ function runMannWhitneyTest(a, b, resultsDiv) {
   const iqrA = calculatePercentile(sortedA, 75) - calculatePercentile(sortedA, 25);
   const iqrB = calculatePercentile(sortedB, 75) - calculatePercentile(sortedB, 25);
   
-  // Determine which group has higher values
+  // Determine which group tends to have higher values (based on average rank).
   const higherGroup = rankSumA / n1 > rankSumB / n2 ? 'A' : 'B';
   
-  // Calculate common language effect size - probability that a random value from one group exceeds a random value from the other
+  // Common-language effect size interpreted directly from U1:
+  // probability that a random value from A is greater than a random value from B.
   const clEffect = (U1 / (n1 * n2)) * 100;
+  const significanceText = pValue <= 0.05 ? '<strong>significantly</strong>' : 'not significantly';
   
   resultsDiv.innerHTML += `
     <p><strong>Mann-Whitney U Test (Wilcoxon Rank-Sum)</strong><br/>
@@ -493,8 +500,8 @@ function runMannWhitneyTest(a, b, resultsDiv) {
     Dataset B: n = ${n2}, Median = ${medianB.toFixed(4)}, IQR = ${iqrB.toFixed(4)}<br/>
     U = ${U.toFixed(2)}, z = ${z.toFixed(4)}, p-value = ${pValue.toFixed(6)}<br/>
     Effect Size (r) = ${effectSize.toFixed(4)}<br/>
-    Common Language Effect Size = ${clEffect.toFixed(1)}% (probability that a random frame from dataset ${higherGroup} has ${higherGroup === 'A' ? 'lower' : 'higher'} frametime)<br/>
-    Dataset ${higherGroup} appears to have ${Math.abs(pValue) <= 0.05 ? '<strong>significantly</strong>' : 'not significantly'} ${higherGroup === 'A' ? 'higher' : 'lower'} frametimes</p>
+    Common Language Effect Size = ${clEffect.toFixed(1)}% (probability that a random value from Dataset A is higher than Dataset B)<br/>
+    Dataset ${higherGroup} appears to have ${significanceText} higher metric values</p>
   `;
   
   return { 
@@ -1128,7 +1135,7 @@ function analyzeDistributionCharacteristics(data) {
   const diffVariance = diffs.reduce((sum, val) => sum + Math.pow(val - diffMedian, 2), 0) / diffs.length;
   
   // Detect problematic transition frequencies (variability in frame pacing)
-  const transitionVariability = Math.sqrt(diffVariance) / diffMedian;
+  const transitionVariability = diffMedian > 0 ? Math.sqrt(diffVariance) / diffMedian : 0;
   
   return {
     mean,
@@ -1154,6 +1161,7 @@ function detectMultimodality(sortedData) {
   const min = sortedData[0];
   const max = sortedData[n-1];
   const range = max - min;
+  if (range <= 0) return false;
   
   // Use Sturges' formula to determine bin count
   const binCount = Math.ceil(Math.log2(n) + 1);
@@ -1520,6 +1528,8 @@ function visualizeFrameTimeStability(dataA, dataB, resultsDiv) {
   // Calculate transition data (differences between consecutive frames)
   const transitionsA = calculateTransitions(dataA);
   const transitionsB = calculateTransitions(dataB);
+  const variabilityA = calculateRelativeVariability(transitionsA.diffs);
+  const variabilityB = calculateRelativeVariability(transitionsB.diffs);
   
   // Add container for the visualization
   resultsDiv.innerHTML += `
@@ -1544,7 +1554,7 @@ function visualizeFrameTimeStability(dataA, dataB, resultsDiv) {
             <ul>
               <li>Median transition: ${calculatePercentile([...transitionsA.diffs].sort((a, b) => a - b), 50).toFixed(3)} ms</li>
               <li>Largest transition: ${Math.max(...transitionsA.diffs).toFixed(3)} ms</li>
-              <li>Transition variability: ${(calculateStdev(transitionsA.diffs) / calculateMean(transitionsA.diffs)).toFixed(3)}</li>
+              <li>Transition variability: ${variabilityA.toFixed(3)}</li>
               <li>Repeated frames: ${transitionsA.repeatedFrames}</li>
               <li>Out-of-sequence frames: ${transitionsA.outOfSequence}</li>
             </ul>
@@ -1555,7 +1565,7 @@ function visualizeFrameTimeStability(dataA, dataB, resultsDiv) {
             <ul>
               <li>Median transition: ${calculatePercentile([...transitionsB.diffs].sort((a, b) => a - b), 50).toFixed(3)} ms</li>
               <li>Largest transition: ${Math.max(...transitionsB.diffs).toFixed(3)} ms</li>
-              <li>Transition variability: ${(calculateStdev(transitionsB.diffs) / calculateMean(transitionsB.diffs)).toFixed(3)}</li>
+              <li>Transition variability: ${variabilityB.toFixed(3)}</li>
               <li>Repeated frames: ${transitionsB.repeatedFrames}</li>
               <li>Out-of-sequence frames: ${transitionsB.outOfSequence}</li>
             </ul>
@@ -1707,6 +1717,7 @@ function renderTransitionScatter(ctx, canvas, data) {
   
   const minTime = Math.min(...allFrameTimes) * 0.9;
   const maxTime = Math.max(...allFrameTimes) * 1.1;
+  const timeRange = maxTime - minTime || 1;
   
   // Draw axes
   ctx.strokeStyle = '#333';
@@ -1762,8 +1773,8 @@ function renderTransitionScatter(ctx, canvas, data) {
   const dataA = data.datasetA.original;
   ctx.fillStyle = 'rgba(75, 192, 192, 0.7)';
   for (let i = 0; i < dataA.length - 1; i++) {
-    const x = padding + (width - 2 * padding) * (dataA[i] - minTime) / (maxTime - minTime);
-    const y = height - padding - (height - 2 * padding) * (dataA[i+1] - minTime) / (maxTime - minTime);
+    const x = padding + (width - 2 * padding) * (dataA[i] - minTime) / timeRange;
+    const y = height - padding - (height - 2 * padding) * (dataA[i+1] - minTime) / timeRange;
     
     ctx.beginPath();
     ctx.arc(x, y, 3, 0, Math.PI * 2);
@@ -1774,8 +1785,8 @@ function renderTransitionScatter(ctx, canvas, data) {
   const dataB = data.datasetB.original;
   ctx.fillStyle = 'rgba(255, 99, 132, 0.7)';
   for (let i = 0; i < dataB.length - 1; i++) {
-    const x = padding + (width - 2 * padding) * (dataB[i] - minTime) / (maxTime - minTime);
-    const y = height - padding - (height - 2 * padding) * (dataB[i+1] - minTime) / (maxTime - minTime);
+    const x = padding + (width - 2 * padding) * (dataB[i] - minTime) / timeRange;
+    const y = height - padding - (height - 2 * padding) * (dataB[i+1] - minTime) / timeRange;
     
     ctx.beginPath();
     ctx.arc(x, y, 3, 0, Math.PI * 2);
@@ -1818,6 +1829,7 @@ function renderFrameSequence(ctx, canvas, data) {
   const allFrameTimes = [...dataA, ...dataB];
   const minTime = Math.min(...allFrameTimes) * 0.9;
   const maxTime = Math.max(...allFrameTimes) * 1.1;
+  const timeRange = maxTime - minTime || 1;
   
   // Draw axes
   ctx.strokeStyle = '#333';
@@ -1875,7 +1887,7 @@ function renderFrameSequence(ctx, canvas, data) {
   
   targetFrametimes.forEach(target => {
     if (target >= minTime && target <= maxTime) {
-      const y = height - padding - (height - 2 * padding) * (target - minTime) / (maxTime - minTime);
+      const y = height - padding - (height - 2 * padding) * (target - minTime) / timeRange;
       
       ctx.beginPath();
       ctx.moveTo(padding, y);
@@ -1898,7 +1910,7 @@ function renderFrameSequence(ctx, canvas, data) {
   ctx.beginPath();
   for (let i = 0; i < dataA.length; i++) {
     const x = padding + (width - 2 * padding) * i / maxFrames;
-    const y = height - padding - (height - 2 * padding) * (dataA[i] - minTime) / (maxTime - minTime);
+    const y = height - padding - (height - 2 * padding) * (dataA[i] - minTime) / timeRange;
     
     if (i === 0) {
       ctx.moveTo(x, y);
@@ -1914,7 +1926,7 @@ function renderFrameSequence(ctx, canvas, data) {
   ctx.beginPath();
   for (let i = 0; i < dataB.length; i++) {
     const x = padding + (width - 2 * padding) * i / maxFrames;
-    const y = height - padding - (height - 2 * padding) * (dataB[i] - minTime) / (maxTime - minTime);
+    const y = height - padding - (height - 2 * padding) * (dataB[i] - minTime) / timeRange;
     
     if (i === 0) {
       ctx.moveTo(x, y);
@@ -1964,7 +1976,10 @@ function renderTransitionHistogram(ctx, canvas, data) {
   
   // Create histogram bins
   const allDiffs = [...diffsA, ...diffsB];
-  const maxDiff = Math.min(Math.max(...allDiffs) * 1.1, calculatePercentile([...allDiffs].sort((a, b) => a - b), 99) * 2);
+  let maxDiff = Math.min(Math.max(...allDiffs) * 1.1, calculatePercentile([...allDiffs].sort((a, b) => a - b), 99) * 2);
+  if (!Number.isFinite(maxDiff) || maxDiff <= 0) {
+    maxDiff = 1;
+  }
   const binCount = 20;
   const binWidth = maxDiff / binCount;
   
@@ -1995,6 +2010,7 @@ function renderTransitionHistogram(ctx, canvas, data) {
     Math.max(...histogramA), 
     Math.max(...histogramB)
   );
+  const safeMaxPercentage = maxPercentage || 1;
   
   // Draw axes
   ctx.strokeStyle = '#333';
@@ -2032,7 +2048,7 @@ function renderTransitionHistogram(ctx, canvas, data) {
   // Draw Y-axis scale (percentages)
   for (let i = 0; i <= 5; i++) {
     const y = height - padding - (height - 2 * padding) * i / 5;
-    const value = (maxPercentage * i / 5).toFixed(1) + '%';
+    const value = (safeMaxPercentage * i / 5).toFixed(1) + '%';
     
     // Y-axis ticks
     ctx.beginPath();
@@ -2048,7 +2064,7 @@ function renderTransitionHistogram(ctx, canvas, data) {
   
   for (let i = 0; i < binCount; i++) {
     const x = padding + (width - 2 * padding) * i / binCount + barWidth * 0.25;
-    const barHeight = (height - 2 * padding) * histogramA[i] / maxPercentage;
+    const barHeight = (height - 2 * padding) * histogramA[i] / safeMaxPercentage;
     const y = height - padding - barHeight;
     
     ctx.fillRect(x, y, barWidth, barHeight);
@@ -2059,7 +2075,7 @@ function renderTransitionHistogram(ctx, canvas, data) {
   
   for (let i = 0; i < binCount; i++) {
     const x = padding + (width - 2 * padding) * i / binCount + barWidth + barWidth * 0.5;
-    const barHeight = (height - 2 * padding) * histogramB[i] / maxPercentage;
+    const barHeight = (height - 2 * padding) * histogramB[i] / safeMaxPercentage;
     const y = height - padding - barHeight;
     
     ctx.fillRect(x, y, barWidth, barHeight);
@@ -2099,6 +2115,12 @@ function calculateStdev(data) {
 function calculateMean(data) {
   if (!data || data.length === 0) return 0;
   return data.reduce((a, b) => a + b) / data.length;
+}
+
+function calculateRelativeVariability(data) {
+  const mean = calculateMean(data);
+  if (!Number.isFinite(mean) || mean === 0) return 0;
+  return calculateStdev(data) / mean;
 }
 
 // Expose these functions globally so main.js (or others) can call them

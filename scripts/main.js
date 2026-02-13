@@ -232,8 +232,10 @@ function populateAllDatasetSelects() {
   selectors.forEach(selector => {
     if (!selector) return;
     
-    // Save the currently selected value if there is one
-    const currentValue = selector.value;
+    // Preserve current selection(s), including multi-select controls.
+    const currentValues = selector.multiple
+      ? Array.from(selector.selectedOptions).map(option => option.value)
+      : [selector.value];
     
     // Clear existing options
     selector.innerHTML = '';
@@ -246,9 +248,16 @@ function populateAllDatasetSelects() {
       selector.appendChild(option);
     });
     
-    // Restore the previously selected value if it still exists
-    if (currentValue && selector.querySelector(`option[value="${currentValue}"]`)) {
-      selector.value = currentValue;
+    // Restore previous selection(s) when possible.
+    if (selector.multiple) {
+      Array.from(selector.options).forEach(option => {
+        option.selected = currentValues.includes(option.value);
+      });
+    } else {
+      const currentValue = currentValues[0];
+      if (currentValue && selector.querySelector(`option[value="${currentValue}"]`)) {
+        selector.value = currentValue;
+      }
     }
   });
 }

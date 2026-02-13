@@ -61,6 +61,56 @@ function extractRowTimestamp(row) {
   return null;
 }
 
+function buildLineScatterPoints(rows, metric, useValueX) {
+  const dataPoints = [];
+  rows.forEach(row => {
+    const value = getMetricValue(row, metric);
+    if (!Number.isFinite(value)) return;
+
+    let xValue;
+    if (useValueX) {
+      const timestamp = extractRowTimestamp(row);
+      xValue = (timestamp != null) ? timestamp : (dataPoints.length + 1);
+    } else {
+      xValue = dataPoints.length + 1;
+    }
+
+    dataPoints.push({ x: xValue, y: value });
+  });
+  return dataPoints;
+}
+
+/**
+ * Rebuilds X/Y points for existing line/scatter datasets when Time-based X toggles.
+ * Uses source metadata captured when datasets are added to the chart.
+ */
+function rebuildCurrentLineScatterDatasets() {
+  if (!Array.isArray(window.chartDatasets) || !window.chartDatasets.length) return;
+  if (window.currentChartType !== 'line' && window.currentChartType !== 'scatter') return;
+
+  const useValueX = document.getElementById('useValueX')?.checked;
+
+  window.chartDatasets = window.chartDatasets.map(datasetCfg => {
+    const sourceDatasetIndex = datasetCfg.sourceDatasetIndex;
+    const sourceMetric = datasetCfg.sourceMetric;
+
+    if (!Number.isInteger(sourceDatasetIndex) || typeof sourceMetric !== 'string') {
+      return datasetCfg;
+    }
+
+    const sourceDataset = window.allDatasets?.[sourceDatasetIndex];
+    if (!sourceDataset?.rows?.length) return datasetCfg;
+
+    const rebuiltPoints = buildLineScatterPoints(sourceDataset.rows, sourceMetric, useValueX);
+    if (!rebuiltPoints.length) return datasetCfg;
+
+    return {
+      ...datasetCfg,
+      data: rebuiltPoints
+    };
+  });
+}
+
 /**
  * Builds Q-Q plot data points, comparing sample quantiles vs. theoretical normal quantiles.
  * @param {number[]} data
@@ -129,11 +179,11 @@ function renderChart(chartType) {
   } else if (chartType === 'violin') {
     ctrlType = 'violin';
     scales.x = { type: 'category', title: { display: true, text: 'Dataset' } };
-    scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
+    scales.y = { type: 'linear', title: { display: true, text: 'Value' }, beginAtZero: false, grace: '10%' };
   } else if (chartType === 'boxplot') {
     ctrlType = 'boxplot';
     scales.x = { type: 'category', title: { display: true, text: 'Dataset' } };
-    scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
+    scales.y = { type: 'linear', title: { display: true, text: 'Value' }, beginAtZero: false, grace: '10%' };
   } else {
     scales.x = { type: 'linear', title: { display: true, text: xTitleSample } };
     scales.y = { type: 'linear', title: { display: true, text: 'Value' } };
@@ -190,6 +240,26 @@ function renderChart(chartType) {
   if (chartType === 'violin' || chartType === 'boxplot') {
     cfg.data.labels = window.chartLabels.slice();
     // we let each dataset carry its own .type and .order when needed
+
+    // Explicitly fit vertical range to grouped values, with a small padding.
+    const groupedValues = [];
+    window.chartDatasets.forEach(dataset => {
+      (dataset.data || []).forEach(group => {
+        if (!Array.isArray(group)) return;
+        group.forEach(value => {
+          if (Number.isFinite(value)) groupedValues.push(value);
+        });
+      });
+    });
+
+    if (groupedValues.length > 0) {
+      const minValue = Math.min(...groupedValues);
+      const maxValue = Math.max(...groupedValues);
+      const span = maxValue - minValue;
+      const padding = span > 0 ? span * 0.1 : Math.max(1, Math.abs(minValue) * 0.1, Math.abs(maxValue) * 0.1);
+      cfg.options.scales.y.min = minValue - padding;
+      cfg.options.scales.y.max = maxValue + padding;
+    }
   }
 
   window.mainChart = new Chart(ctx, cfg);
@@ -202,6 +272,7 @@ function renderChart(chartType) {
  */
 function clearChart() {
   window.currentChartType = null;
+  window.chartLabels = [];
   window.chartDatasets.length = 0;
   if (window.mainChart) {
     window.mainChart.destroy();
@@ -213,8 +284,17 @@ function clearChart() {
   if (chartContainer) {
     chartContainer.classList.add('empty');
   }
-  
-  document.getElementById('datasetOrderList').innerHTML = '';
+
+  const datasetOrderList = document.getElementById('datasetOrderList');
+  if (datasetOrderList) {
+    datasetOrderList.innerHTML = '';
+  }
+
+  const clearChartBtn = document.getElementById('clearChartBtn');
+  if (clearChartBtn) {
+    clearChartBtn.disabled = true;
+  }
+
   console.log("Chart cleared");
 }
 
@@ -232,9 +312,15 @@ function hexToRgba(hex, alpha) {
  */
 function addToChart() {
   const select = document.getElementById('datasetSelect');
+  if (!select) return;
+
   const indices = Array.from(select.selectedOptions).map(o => +o.value);
   if (indices.length === 0) {
-    console.error("No datasets selected.");
+    if (typeof window.notify === 'function') {
+      window.notify('Select at least one dataset before adding to chart.', 'warning');
+    } else {
+      console.error('No datasets selected.');
+    }
     return;
   }
 
@@ -249,18 +335,26 @@ function addToChart() {
   
   // Disallow mixing chart types on the same grid
   if (window.chartDatasets.length && chartType !== window.currentChartType) {
-    notify(`You already started a “${window.currentChartType}” chart.
-  Clear the chart first if you want to switch to “${chartType}”.`, 'warning');
+    if (typeof window.notify === 'function') {
+      window.notify(
+        `You already started a "${window.currentChartType}" chart. Clear it first to switch to "${chartType}".`,
+        'warning'
+      );
+    } else {
+      console.warn(
+        `You already started a "${window.currentChartType}" chart. Clear it first to switch to "${chartType}".`
+      );
+    }
     return;
   }
 
   // ---- VIOLIN + BOXPLOT COMBO ----
   if (chartType === 'violin') {
-  const labels = indices.map(i => allDatasets[i].name);
+  const labels = indices.map(i => window.allDatasets[i].name);
   const groups = indices.map(i =>
-    allDatasets[i].rows
+    window.allDatasets[i].rows
       .map(r => getMetricValue(r, metric))
-      .filter(v => v != null)
+      .filter(v => Number.isFinite(v))
   );
 
   window.chartLabels = labels.slice();
@@ -295,20 +389,21 @@ function addToChart() {
     categoryPercentage: 1.0
   };
 
-  window.chartDatasets = [violinDs, boxDs];
-  renderChart('violin');
-  updateDatasetOrder();
-  document.getElementById('clearChartBtn').disabled = false;
-  return;
-  }
+	  window.chartDatasets = [violinDs, boxDs];
+	  renderChart('violin');
+	  updateDatasetOrder();
+	  const clearChartBtn = document.getElementById('clearChartBtn');
+	  if (clearChartBtn) clearChartBtn.disabled = false;
+	  return;
+	  }
 
   // ---- BOXPLOT ONLY ----
   if (chartType === 'boxplot') {
-    const labels = indices.map(i => allDatasets[i].name);
+    const labels = indices.map(i => window.allDatasets[i].name);
     const groups = indices.map(i =>
-      allDatasets[i].rows
+      window.allDatasets[i].rows
         .map(r => getMetricValue(r, metric))
-        .filter(v => v != null)
+        .filter(v => Number.isFinite(v))
     );
 
     window.chartLabels = labels.slice();
@@ -325,7 +420,8 @@ function addToChart() {
     window.chartDatasets = [boxDs];
     renderChart('boxplot');
     updateDatasetOrder();
-    document.getElementById('clearChartBtn').disabled = false;
+    const clearChartBtn = document.getElementById('clearChartBtn');
+    if (clearChartBtn) clearChartBtn.disabled = false;
     return;
   }
 
@@ -333,31 +429,18 @@ function addToChart() {
   // ---- ALL OTHER CHART TYPES ----
   indices.forEach(idx => {
     const ds = window.allDatasets[idx];
+    if (!ds?.rows?.length) return;
+
     const vals = ds.rows
       .map(r => getMetricValue(r, metric))
-      .filter(v => v != null);
+      .filter(v => Number.isFinite(v));
     if (!vals.length) return;
 
     let cfg;
     // line & scatter
     if (chartType === 'line' || chartType === 'scatter') {
       const useValueX = document.getElementById('useValueX')?.checked;
-
-      // Rebuild data points from rows so we can align each kept value with its timestamp
-      const dataPoints = [];
-      ds.rows.forEach(r => {
-        const val = getMetricValue(r, metric);
-        if (val == null) return;
-
-        let xVal;
-        if (useValueX) {
-          const ts = extractRowTimestamp(r);
-          xVal = (ts != null) ? ts : (dataPoints.length + 1);  // fallback to sequential index
-        } else {
-          xVal = dataPoints.length + 1; // simple sample/frame #
-        }
-        dataPoints.push({ x: xVal, y: val });
-      });
+      const dataPoints = buildLineScatterPoints(ds.rows, metric, useValueX);
 
       if (!dataPoints.length) return;
 
@@ -369,7 +452,9 @@ function addToChart() {
         pointRadius:     chartType === 'scatter' ? 3 : 1,
         showLine:        chartType === 'line',
         fill:            false,
-        parsing:         false   // makes sure Chart.js uses the provided x,y directly
+        parsing:         false,  // makes sure Chart.js uses the provided x,y directly
+        sourceDatasetIndex: idx,
+        sourceMetric:     metric
       };
     }
     // histogram
@@ -419,7 +504,8 @@ function addToChart() {
 
   renderChart(chartType);
   updateDatasetOrder();
-  document.getElementById('clearChartBtn').disabled = false;
+  const clearChartBtn = document.getElementById('clearChartBtn');
+  if (clearChartBtn) clearChartBtn.disabled = false;
 }
 
 /**
@@ -452,6 +538,12 @@ function removeDataset(index) {
   
   // Remove the dataset at the specified index
   window.chartDatasets.splice(index, 1);
+
+  // If all datasets are removed, fully reset chart state.
+  if (window.chartDatasets.length === 0) {
+    clearChart();
+    return;
+  }
   
   // Update the dataset order list
   updateDatasetOrder();
@@ -460,17 +552,6 @@ function removeDataset(index) {
   if (window.mainChart) {
     window.mainChart.data.datasets = window.chartDatasets;
     window.mainChart.update();
-  }
-  
-  // If all datasets are removed, reset the chart state
-  if (window.chartDatasets.length === 0) {
-    const clearChartBtn = document.getElementById('clearChartBtn');
-    if (clearChartBtn) clearChartBtn.disabled = true;
-    
-    if (window.mainChart) {
-      window.mainChart.destroy();
-      window.mainChart = null;
-    }
   }
 }
 
@@ -655,6 +736,7 @@ window.displayRawData = displayRawData;
 window.buildHistogram = buildHistogram;
 window.buildQQPlot = buildQQPlot;
 window.renderChart = renderChart;
+window.rebuildCurrentLineScatterDatasets = rebuildCurrentLineScatterDatasets;
 window.clearChart = clearChart;
 window.addToChart = addToChart;
 window.moveDataset = moveDataset;
